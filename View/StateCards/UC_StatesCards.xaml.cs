@@ -22,6 +22,7 @@ using static ZenergyBFSI.Model.InspectionUtils;
 using DevExpress.Xpf.Charts;
 using Color = System.Windows.Media.Color;
 using Colors = System.Windows.Media.Colors;
+using ZenergyBFSI.Service;
 
 namespace ZenergyBFSI.View.StateCards
 {
@@ -305,19 +306,34 @@ namespace ZenergyBFSI.View.StateCards
         // ════════════════════════════════════════════════════════
         public UC_StatesCards()
         {
- 
+
             InitializeComponent();
 
             DpDate.SelectedDate = DateTime.Today;
 
-  
-
             //StartClock();
-            Loaded +=   (_, __) => { 
-                //RedrawHourly();
- 
+            Loaded += (_, __) =>
+            {
+                // 订阅看板消息（在 UC_Home 之后，确保消息链路建立）
+                Messenger.Default.Register<DashboardUpdateMessage>(this, OnDashboardUpdateMessage);
+                Messenger.Default.Register<StatusLightUpdateMessage>(this, OnStatusLightUpdateMessage);
+
+                // 启动模拟（构造函数中调用时 UC_Home.OnLoaded 还未执行，消息订阅未建立）
+                DashboardService.I.StartSimulation(10);
+
+                RedrawHourly();
             };
             DataContext = this;
+        }
+
+        private void OnDashboardUpdateMessage(DashboardUpdateMessage msg)
+        {
+            UpdateDashboard(msg.Data);
+        }
+
+        private void OnStatusLightUpdateMessage(StatusLightUpdateMessage msg)
+        {
+            UpdateStatusLight(msg.Result, msg.CellCode, msg.Time);
         }
 
  
