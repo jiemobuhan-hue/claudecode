@@ -23,6 +23,12 @@ namespace ZenergyBFSI.Service
         private bool _isRunning = false;
         private readonly object _runLock = new object();
 
+        // 模拟数据生成器
+        private DispatcherTimer _simTimer;
+        private readonly Random _random = new Random();
+        private bool _simulationRunning = false;
+        private int _simCounter = 0;
+
         public event EventHandler<DashboardSnapshot> SnapshotReady;
 
         public DashboardWorker()
@@ -220,6 +226,119 @@ namespace ZenergyBFSI.Service
         }
 
         private struct KpiResult { public int Total; public int Ok; public int Ng; }
+
+        /// <summary>
+        /// 启动模拟模式：定时生成随机测试数据插入数据库
+        /// </summary>
+        /// <param name="intervalSeconds">模拟间隔（秒）</param>
+        public void StartSimulation(int intervalSeconds = 3)
+        {
+            if (_simulationRunning) return;
+            _simulationRunning = true;
+
+            // 立即插入一条模拟数据
+            InsertSimulatedData();
+
+            // 启动定时器
+            _simTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(intervalSeconds) };
+            _simTimer.Tick += (s, e) => InsertSimulatedData();
+            _simTimer.Start();
+
+            System.Diagnostics.Debug.WriteLine($"[DashboardWorker] 模拟模式启动，每 {intervalSeconds} 秒插入数据");
+        }
+
+        /// <summary>
+        /// 停止模拟模式
+        /// </summary>
+        public void StopSimulation()
+        {
+            if (!_simulationRunning) return;
+            _simulationRunning = false;
+            _simTimer?.Stop();
+            _simTimer = null;
+            System.Diagnostics.Debug.WriteLine($"[DashboardWorker] 模拟模式停止");
+        }
+
+        private void InsertSimulatedData()
+        {
+            try
+            {
+                _simCounter++;
+                string cellCode = $"SIM{_simCounter:D6}";
+                bool isInbound = _random.NextDouble() < 0.6; // 60% 进站, 40% 出站
+
+                var now = DateTime.Now;
+                var data = new CellData
+                {
+                    电芯码 = cellCode,
+                    进站时间 = now.ToString("yyyy/MM/dd HH:mm:ss"),
+                    入站结果 = "OK",
+                    出站结果 = "",
+                    出站时间 = "",
+                    是否复投 = false,
+                    检验位置 = $"工位{_random.Next(1, 5)}"
+                };
+
+                if (!isInbound)
+                {
+                    // 出站数据
+                    data.出站结果 = _random.NextDouble() < 0.85 ? "OK" : "NG"; // 85% OK, 15% NG
+                    data.出站时间 = now.ToString("yyyy/MM/dd HH:mm:ss");
+                    data.入站结果 = "OK";
+
+                    // 随机填充视觉检测参数（表示已出站）
+                    int paramCount = _random.Next(1, 7);
+                    for (int i = 0; i < paramCount; i++)
+                    {
+                        switch (i)
+                        {
+                            case 0: data.视觉检测参数一 = "正常"; break;
+                            case 1: data.视觉检测参数二 = "正常"; break;
+                            case 2: data.视觉检测参数三 = "正常"; break;
+                            case 3: data.视觉检测参数四 = "正常"; break;
+                            case 4: data.视觉检测参数五 = "正常"; break;
+                            case 5: data.视觉检测参数六 = "正常"; break;
+                        }
+                    }
+
+                    // 随机NG类型
+                    if (data.出站结果 == "NG")
+                    {
+                        data.Ng类型数量 = _random.Next(1, 4);
+                        string[] ngTypes = { "外观划伤", "气泡", "色差", "变形", "污渍", "凹陷", "凸点", "裂纹" };
+                        for (int i = 0; i < data.Ng类型数量 && i < 8; i++)
+                        {
+                            string type = ngTypes[_random.Next(ngTypes.Length)];
+                            switch (i)
+                            {
+                                case 0: data.Ng类型1 = type; break;
+                                case 1: data.Ng类型2 = type; break;
+                                case 2: data.Ng类型3 = type; break;
+                                case 3: data.Ng类型4 = type; break;
+                                case 4: data.Ng类型5 = type; break;
+                                case 5: data.Ng类型6 = type; break;
+                                case 6: data.Ng类型7 = type; break;
+                                case 7: data.Ng类型8 = type; break;
+                            }
+                        }
+                    }
+                }
+
+                // 插入数据库
+                var temp = new List<CellData> { data };
+                SQLiteGenericHelper.BulkUpsert(temp, "电芯码", "CellData");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[DashboardWorker] 插入模拟数据: {cellCode}, 进站={isInbound}, 出站结果={data.出站结果}");
+
+                // 触发刷新
+                RequestRefresh();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DashboardWorker] 插入模拟数据异常: {ex.Message}");
+            }
+        }
 
         public void Dispose()
         {

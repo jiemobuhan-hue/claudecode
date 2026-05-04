@@ -71,6 +71,17 @@ namespace ZenergyBFSI.Service
         public void RequestRefresh() { _worker?.RequestRefresh(); }
         public void Reset() { _worker?.RequestRefresh(); }
 
+        /// <summary>
+        /// 启动模拟模式（定时生成随机测试数据）
+        /// </summary>
+        /// <param name="intervalSeconds">模拟间隔（秒），默认3秒</param>
+        public void StartSimulation(int intervalSeconds = 3) { _worker?.StartSimulation(intervalSeconds); }
+
+        /// <summary>
+        /// 停止模拟模式
+        /// </summary>
+        public void StopSimulation() { _worker?.StopSimulation(); }
+
         private void OnSnapshotReady(object sender, DashboardSnapshot snapshot)
         {
             bool shouldNotify = false;
