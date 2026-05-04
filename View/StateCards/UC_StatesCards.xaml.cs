@@ -242,9 +242,10 @@ namespace ZenergyBFSI.View.StateCards
 
                 // 分页更新：从 data 中获取总页数（需 DashboardData 提供 TotalPages 字段）
                 // 暂时使用记录数估算，后续应从 data.TotalPages 获取
-                int pageSize = 50; // 每页记录数，需与后端保持一致
+                int pageSize = 20; // 每页记录数，需与后端保持一致
                 int totalRecords = data.Recent?.Count ?? 0;
                 _totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
+                _currentPage = 0;
 
                 ApplyKpi(data);
                 ApplyNgTypes(data.NgTypes);
