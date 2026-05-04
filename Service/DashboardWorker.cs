@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Threading;
 using ZenergyBFSI.Model;
+using static ZenergyBFSI.Model.InspectionUtils;
 
 namespace ZenergyBFSI.Service
 {
