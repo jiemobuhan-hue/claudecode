@@ -83,10 +83,13 @@ namespace ZenergyBFSI.Service
             var fourHoursAgoStr = fourHoursAgo.ToString("yyyy/MM/dd HH:mm:ss");
 
             // Query inbound records with pagination
+            // 注意：LIMIT/OFFSET 必须内嵌整数，不能用参数绑定
             int offset = _pageIndex * _pageSize;
             var records = SQLiteGenericHelper.QueryRaw<CellData>(
-                @"SELECT * FROM CellData WHERE 进站时间 >= @p0 ORDER BY 进站时间 DESC LIMIT @p1 OFFSET @p2",
-                fourHoursAgoStr, _pageSize, offset);
+                $@"SELECT * FROM CellData WHERE 进站时间 >= @p0 ORDER BY 进站时间 DESC LIMIT {_pageSize} OFFSET {offset}",
+                fourHoursAgoStr);
+
+            System.Diagnostics.Debug.WriteLine($"[DashboardWorker] 查询到 {records.Count} 条记录，4小时前={fourHoursAgoStr}");
 
             // Query total count
             var totalCountObj = SQLiteGenericHelper.ExecuteScalar<object>(
@@ -259,10 +262,50 @@ namespace ZenergyBFSI.Service
             System.Diagnostics.Debug.WriteLine($"[DashboardWorker] 模拟模式停止");
         }
 
+        private void EnsureCellDataTable()
+        {
+            if (SQLiteGenericHelper.TableExists("CellData")) return;
+
+            SQLiteGenericHelper.CreateTable(@"CREATE TABLE CellData (
+                Id INTEGER PRIMARY KEY,
+                TimeStamp INTEGER,
+                电芯码 TEXT,
+                进站时间 TEXT,
+                检验位置 TEXT,
+                是否复投 INTEGER DEFAULT 0,
+                Ng类型数量 INTEGER DEFAULT 0,
+                Ng类型1 TEXT,
+                Ng类型2 TEXT,
+                Ng类型3 TEXT,
+                Ng类型4 TEXT,
+                Ng类型5 TEXT,
+                Ng类型6 TEXT,
+                Ng类型7 TEXT,
+                Ng类型8 TEXT,
+                入站结果 TEXT,
+                出站结果 TEXT,
+                出站时间 TEXT,
+                视觉检测状态 TEXT,
+                视觉检测参数一 TEXT,
+                视觉检测参数二 TEXT,
+                视觉检测参数三 TEXT,
+                视觉检测参数四 TEXT,
+                视觉检测参数五 TEXT,
+                视觉检测参数六 TEXT,
+                MOM查询来料状态 TEXT,
+                MOM出站结果 TEXT DEFAULT '0',
+                视觉检测结果 TEXT,
+                人工复判次数 INTEGER DEFAULT 0
+            )");
+            System.Diagnostics.Debug.WriteLine("[DashboardWorker] CellData 表创建成功");
+        }
+
         private void InsertSimulatedData()
         {
             try
             {
+                // 确保 CellData 表存在
+                EnsureCellDataTable();
                 _simCounter++;
                 string cellCode = $"SIM{_simCounter:D6}";
                 bool isInbound = _random.NextDouble() < 0.6; // 60% 进站, 40% 出站
@@ -329,7 +372,7 @@ namespace ZenergyBFSI.Service
                 SQLiteGenericHelper.BulkUpsert(temp, "电芯码", "CellData");
 
                 System.Diagnostics.Debug.WriteLine(
-                    $"[DashboardWorker] 插入模拟数据: {cellCode}, 进站={isInbound}, 出站结果={data.出站结果}");
+                    $"[DashboardWorker] 插入模拟数据: {cellCode}, 进站={isInbound}, 出站结果={data.出站结果}, 视觉参数一={data.视觉检测参数一}");
 
                 // 触发刷新
                 RequestRefresh();
