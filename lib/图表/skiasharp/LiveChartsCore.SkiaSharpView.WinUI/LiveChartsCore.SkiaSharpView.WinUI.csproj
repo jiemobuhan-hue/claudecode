@@ -1,0 +1,60 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  
+  <PropertyGroup>
+    <TargetFrameworks>
+      net6.0-windows10.0.19041.0;
+      net8.0-windows10.0.19041.0;
+    </TargetFrameworks>
+
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <RootNamespace>LiveChartsCore.SkiaSharpView.WinUI</RootNamespace>
+    <AssemblyName>LiveChartsCore.SkiaSharpView.WinUI</AssemblyName>
+    <PathToPackAssets>../../../</PathToPackAssets>
+  </PropertyGroup>
+
+  <Import Project="../../../nuget.props" />
+  <PropertyGroup>
+    <Description>
+      $(Description) This package includes all the required code and dependencies for rendering charts in WinUI with SkiaSharp.
+    </Description>
+  </PropertyGroup>
+
+  <Import Project="..\..\..\build\WinUISharedLinks.Build.props" />
+  <Import Project="..\..\..\build\SharedLinks.Build.props" />
+  <Import Project="..\..\..\build\XamlSharedLinks.Build.props" />
+  <Import Project="..\..\..\build\NativeSharedLinks.Build.props" />
+
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);WINUI_LVC;XAML_LVC</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--not sure if we should ignore this warning.-->
+    <NoWarn>$(NoWarn);NETSDK1206</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.7.250606001" />
+    <PackageReference Include="SkiaSharp.Views.WinUI" Version="$(LatestSkiaSharpVersion)" />
+    <PackageReference Include="SkiaSharp.HarfBuzz" Version="$(LatestSkiaSharpVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\LiveChartsCore\LiveChartsCore.csproj" />
+    <ProjectReference Include="..\LiveChartsCore.SkiaSharp\LiveChartsCore.SkiaSharpView.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\generators\LiveChartsGenerators\LiveChartsGenerators.csproj">
+      <OutputItemType>Analyzer</OutputItemType>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

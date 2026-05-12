@@ -1,0 +1,203 @@
+﻿<UserControl x:Class="ZenergyBFSI.View.UC_Control"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:dxr="http://schemas.devexpress.com/winfx/2008/xaml/ribbon"
+             xmlns:view="clr-namespace:ZenergyBFSI.View" 
+             FontSize="16" Background="White"
+             mc:Ignorable="d" 
+             d:DesignHeight="650" d:DesignWidth="1250">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <dxr:RibbonControl Grid.Row="0" RibbonStyle="Office2019" Margin="0,0,0,0" ShowApplicationButton="False">
+            <dxr:RibbonDefaultPageCategory Caption="defaultCategory">
+                <dxr:RibbonPage Caption="功能">
+                    <dxr:RibbonPageGroup Caption="信号监测" 
+                                         ShowCaptionButton="False"
+                                         IsCaptionButtonEnabled="True">
+                        <dxb:BarButtonItem Content="启动" 
+                                           x:Name="btn_Start" 
+                                           ItemClick="Start_ItemClick" 
+                                           LargeGlyph="{dx:DXImage Images/Arrows/Play_32x32.png}"/>
+                        <dxb:BarButtonItem Content="停止" 
+                                           IsVisible="False" 
+                                           x:Name="btn_Stop" 
+                                           ItemClick="Stop_ItemClick" 
+                                           LargeGlyph="{dx:DXImage Images/Arrows/Pause_32x32.png}"/>
+                        <dxb:BarButtonItem Content="单步" 
+                                           IsVisible="False" 
+                                           x:Name="btn_Debug"
+                                           ItemClick="btn_Debug_ItemClick" 
+                                           LargeGlyph="{dx:DXImage Images/Arrows/Play_32x32.png}"/>
+                    </dxr:RibbonPageGroup>
+                    <dxr:RibbonPageGroup Caption="其他">
+                        <dxb:BarButtonItem Content="登出" 
+                                           ItemClick="Logout_ItemClick"
+                                           RibbonStyle="All" 
+                                           LargeGlyph="{dx:DXImage Images/Actions/Cancel_32x32.png}" />
+                    </dxr:RibbonPageGroup>
+                </dxr:RibbonPage>
+            </dxr:RibbonDefaultPageCategory>
+        </dxr:RibbonControl>
+        <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="50"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="50"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Row="0" Grid.Column="0">
+                <Label FontSize="20" Foreground="#FF4092DA">输入信号:</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="1" Grid.Column="0">
+                <view:PA_Signal x:Name="Signal_I0"/>
+                <Label HorizontalAlignment="Center">0:左手按钮</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="1" Grid.Column="1">
+                <view:PA_Signal x:Name="Signal_I1"/>
+                <Label HorizontalAlignment="Center">1:右手按钮</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="1" Grid.Column="2">
+                <view:PA_Signal x:Name="Signal_I2"/>
+                <Label HorizontalAlignment="Center">2:急停(松开)</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="1" Grid.Column="3">
+                <view:PA_Signal x:Name="Signal_I3"/>
+                <Label HorizontalAlignment="Center">3:左探针下</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="1" Grid.Column="4">
+                <view:PA_Signal x:Name="Signal_I4"/>
+                <Label HorizontalAlignment="Center">4:右探针下</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="1" Grid.Column="5">
+                <view:PA_Signal x:Name="Signal_I5"/>
+                <Label HorizontalAlignment="Center">5:托盘推出</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="1" Grid.Column="6">
+                <view:PA_Signal x:Name="Signal_I6"/>
+                <Label HorizontalAlignment="Center">6:托盘收回</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="1" Grid.Column="7">
+                <view:PA_Signal x:Name="Signal_I7"/>
+                <Label HorizontalAlignment="Center">7</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="2" Grid.Column="0">
+                <view:PA_Signal x:Name="Signal_I8"/>
+                <Label HorizontalAlignment="Center">8:左探针上</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="2" Grid.Column="1">
+                <view:PA_Signal x:Name="Signal_I9"/>
+                <Label HorizontalAlignment="Center">9:右探针上</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="2" Grid.Column="2">
+                <view:PA_Signal x:Name="Signal_I10"/>
+                <Label HorizontalAlignment="Center">10</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="2" Grid.Column="3">
+                <view:PA_Signal x:Name="Signal_I11"/>
+                <Label HorizontalAlignment="Center">11</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="2" Grid.Column="4">
+                <view:PA_Signal x:Name="Signal_I12"/>
+                <Label HorizontalAlignment="Center">12</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="2" Grid.Column="5">
+                <view:PA_Signal x:Name="Signal_I13"/>
+                <Label HorizontalAlignment="Center">13</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="2" Grid.Column="6">
+                <view:PA_Signal x:Name="Signal_I14"/>
+                <Label HorizontalAlignment="Center">14</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="2" Grid.Column="7">
+                <view:PA_Signal x:Name="Signal_I15"/>
+                <Label HorizontalAlignment="Center">15</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="3" Grid.Column="0">
+                <Label FontSize="20" Foreground="#FF4092DA">输出信号:</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="4" Grid.Column="0">
+                <view:PA_Signal x:Name="Signal_O0"/>
+                <Label HorizontalAlignment="Center">0</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="4" Grid.Column="1">
+                <view:PA_Signal x:Name="Signal_O1"/>
+                <Label HorizontalAlignment="Center">1</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="4" Grid.Column="2">
+                <view:PA_Signal x:Name="Signal_O2"/>
+                <Label HorizontalAlignment="Center">2</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="4" Grid.Column="3">
+                <view:PA_Signal x:Name="Signal_O3"/>
+                <Label HorizontalAlignment="Center">3</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="4" Grid.Column="4">
+                <view:PA_Signal x:Name="Signal_O4"/>
+                <Label HorizontalAlignment="Center">4</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="4" Grid.Column="5">
+                <view:PA_Signal x:Name="Signal_O5"/>
+                <Label HorizontalAlignment="Center">5</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="4" Grid.Column="6">
+                <view:PA_Signal x:Name="Signal_O6"/>
+                <Label HorizontalAlignment="Center">6</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="4" Grid.Column="7">
+                <view:PA_Signal x:Name="Signal_O7"/>
+                <Label HorizontalAlignment="Center">7:指示灯红</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="5" Grid.Column="0">
+                <view:PA_Signal x:Name="Signal_O8"/>
+                <Label HorizontalAlignment="Center">8:指示灯绿</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="5" Grid.Column="1">
+                <view:PA_Signal x:Name="Signal_O9"/>
+                <Label HorizontalAlignment="Center">9:蜂鸣器</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="5" Grid.Column="2">
+                <view:PA_Signal x:Name="Signal_O10"/>
+                <Label HorizontalAlignment="Center">10:右探针下</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="5" Grid.Column="3">
+                <view:PA_Signal x:Name="Signal_O11"/>
+                <Label HorizontalAlignment="Center">11:右探针上</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="5" Grid.Column="4">
+                <view:PA_Signal x:Name="Signal_O12"/>
+                <Label HorizontalAlignment="Center">12:左探针下</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="5" Grid.Column="5">
+                <view:PA_Signal x:Name="Signal_O13"/>
+                <Label HorizontalAlignment="Center">13:左探针上</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="5" Grid.Column="6">
+                <view:PA_Signal x:Name="Signal_O14"/>
+                <Label HorizontalAlignment="Center">14:托盘进</Label>
+            </StackPanel>
+            <StackPanel Grid.Row="5" Grid.Column="7">
+                <view:PA_Signal x:Name="Signal_O15"/>
+                <Label HorizontalAlignment="Center">15:托盘出</Label>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

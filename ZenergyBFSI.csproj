@@ -2,7 +2,7 @@
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
-<LangVersion>9.0</LangVersion>
+    <LangVersion>9.0</LangVersion>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{B85302C1-F78B-4BF8-B5B8-3B146CA0A681}</ProjectGuid>
@@ -458,6 +458,7 @@
     <Compile Include="Service\CRUDServices\HarnessMeasureRepository.cs" />
     <Compile Include="Service\DashboardService.cs" />
     <Compile Include="Service\DashboardWorker.cs" />
+    <Compile Include="Service\DashboardWorkerTests.cs" />
     <Compile Include="Service\FinsNetOmron.cs" />
     <Compile Include="Service\LogHelper.cs" />
     <Compile Include="Service\OmronConnectedCip.cs" />

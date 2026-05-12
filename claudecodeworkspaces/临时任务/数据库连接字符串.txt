@@ -1,0 +1,1 @@
+Data Source=(localdb)\MSSQLLocalDB;Initial Catalog=VisionProgram;User ID=sa;Trust Server Certificate=True

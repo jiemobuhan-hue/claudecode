@@ -1,0 +1,76 @@
+﻿<Project Sdk="Uno.Sdk/6.3.28">
+  
+  <PropertyGroup>
+    <UnoSingleProject>true</UnoSingleProject>
+    <OutputType>Library</OutputType>
+    <SkiaSharpVersion>$(LatestSkiaSharpVersion)</SkiaSharpVersion>
+
+    <TargetFrameworks>
+      net9.0;net9.0-android;net9.0-ios;net9.0-browserwasm;net9.0-desktop;
+      net10.0;net10.0-android;net10.0-ios;net10.0-browserwasm;net10.0-desktop
+    </TargetFrameworks>
+
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">
+      $(TargetFrameworks);
+      net9.0-windows10.0.19041.0;
+      net10.0-windows10.0.19041.0;
+    </TargetFrameworks>
+
+    <EnableMsixTooling Condition="$([MSBuild]::IsOSPlatform('windows'))">true</EnableMsixTooling>
+
+    <!-- Ensures the .xr.xml files are generated in a proper layout folder -->
+    <GenerateLibraryLayout>true</GenerateLibraryLayout>
+
+    <RootNamespace>LiveChartsCore.SkiaSharpView.WinUI</RootNamespace>
+    <AssemblyName>LiveChartsCore.SkiaSharpView.Uno.WinUI</AssemblyName>
+    <PathToPackAssets>../../../</PathToPackAssets>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- hack.. idk where is this being packed... -->
+    <None Include="$(OutputPath)$(AssemblyName).uprimarker" Pack="false" />
+  </ItemGroup>
+
+  <Import Project="../../../nuget.props" />
+  <PropertyGroup>
+    <Description>
+      $(Description) This package includes all the required code and dependencies for rendering charts in Uno Platform with SkiaSharp.
+    </Description>
+  </PropertyGroup>
+
+  <Import Project="../../../build/WinUISharedLinks.Build.props" />
+  <Import Project="../../../build/SharedLinks.Build.props" />
+  <Import Project="../../../build/XamlSharedLinks.Build.props" />
+  <Import Project="../../../build/NativeSharedLinks.Build.props" />
+
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);UNO_LVC;WINUI_LVC;XAML_LVC</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../LiveChartsCore.SkiaSharp/LiveChartsCore.SkiaSharpView.csproj" />
+    <!-- If windows add SkiaSharp WinUI package. -->
+    <PackageReference
+       Condition="$(TargetFramework.Contains('-windows'))"
+       Include="SkiaSharp.Views.WinUI"
+       Version="$(LatestSkiaSharpVersion)" />
+    <!-- otherwise add SkiaSharp Uno package. -->
+    <PackageReference
+       Condition="!$(TargetFramework.Contains('-windows'))"
+       Include="SkiaSharp.Views.Uno.WinUI"
+       Version="$(LatestSkiaSharpVersion)" />
+  </ItemGroup>
+
+  <!-- Include Uno skia renderer if needed -->
+  <PropertyGroup Condition="'$(HasOS)' != 'true'">
+    <UnoFeatures>$(UnoFeatures);SkiaRenderer</UnoFeatures>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../generators/LiveChartsGenerators/LiveChartsGenerators.csproj">
+      <OutputItemType>Analyzer</OutputItemType>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+  
+</Project>

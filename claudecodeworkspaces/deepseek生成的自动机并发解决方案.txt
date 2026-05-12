@@ -1,0 +1,418 @@
+```markdown
+# 并发工位自动机框架
+
+## 概述
+
+本方案提供一套基于 C# 的**并发自动机逻辑**，可同时监控多个工位的信号并执行对应动作。具备以下特性：
+
+- **解耦设计**：通过 `IStationHandler` 接口将业务逻辑与框架完全分离。
+- **动态工位**：支持运行时添加任意数量工位，不再硬编码。
+- **安全并发**：利用 `Interlocked` 防止重复启动，`CancellationToken` 统一控制生命周期。
+- **异常即停**：任意工位心跳失败、动作异常均会立即触发全局停止。
+- **心跳监控**：每个工位循环内嵌心跳检测，默认 1 秒超时保护。
+- **信号驱动**：每个工位仅在被捕获到信号时执行动作，否则持续监听。
+
+---
+
+## 架构图
+
+```
+┌─────────────── Global Automaton ───────────────┐
+│  State: Stopped / Running / Error               │
+│  CancellationTokenSource → 统一取消              │
+│                                                  │
+│  ┌── Station 1 ──┐  ┌── Station 2 ──┐            │
+│  │ IStationHandler│  │ IStationHandler│  ...     │
+│  │ - Heartbeat    │  │ - Heartbeat    │          │
+│  │ - SignalWait   │  │ - SignalWait   │          │
+│  │ - Action       │  │ - Action       │          │
+│  └────────────────┘  └────────────────┘          │
+└──────────────────────────────────────────────────┘
+```
+
+---
+
+## 核心接口定义
+
+### 1. 状态枚举
+
+```csharp
+public enum StationState
+{
+    Idle,
+    Running,
+    Completed,
+    Error
+}
+
+public enum AutomatonState
+{
+    Stopped,
+    Running,
+    Error
+}
+```
+
+### 2. 工位处理器接口（需用户实现）
+
+每个工位的业务逻辑都必须实现此接口。
+
+```csharp
+public interface IStationHandler
+{
+    /// <summary>
+    /// 心跳检测函数。返回 true 表示工位健康。
+    /// 框架自动施加 1 秒超时。
+    /// </summary>
+    Task<bool> CheckHeartbeatAsync(CancellationToken token);
+
+    /// <summary>
+    /// 一次性信号判断函数。
+    /// 返回 true 表示捕获到信号，框架随后会自动执行 ExecuteActionAsync。
+    /// </summary>
+    Task<bool> WaitForSignalAsync(CancellationToken token);
+
+    /// <summary>
+    /// 信号捕获后执行的动作。
+    /// </summary>
+    Task ExecuteActionAsync(CancellationToken token);
+}
+```
+
+---
+
+## 框架实现
+
+### 1. 工位状态机（Station）
+
+```csharp
+public class Station
+{
+    private readonly IStationHandler _handler;
+    private readonly Action<int, StationState>? _onStateChanged;
+    private int _isRunning = 0;
+
+    public int Id { get; }
+    public StationState State { get; private set; } = StationState.Idle;
+
+    public Station(int id, IStationHandler handler, Action<int, StationState>? onStateChanged = null)
+    {
+        Id = id;
+        _handler = handler;
+        _onStateChanged = onStateChanged;
+    }
+
+    public async Task RunAsync(CancellationToken token)
+    {
+        if (Interlocked.Exchange(ref _isRunning, 1) == 1)
+            throw new InvalidOperationException($"工位 {Id} 已在运行中");
+
+        try
+        {
+            SetState(StationState.Running);
+            await MonitoringLoopAsync(token);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _isRunning, 0);
+            if (State == StationState.Running)
+                SetState(StationState.Idle);
+        }
+    }
+
+    private async Task MonitoringLoopAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            // --- 心跳检测（1秒超时）---
+            try
+            {
+                bool heartbeatOk = await _handler.CheckHeartbeatAsync(token)
+                    .WaitAsync(TimeSpan.FromSeconds(1), token);
+                if (!heartbeatOk)
+                {
+                    SetState(StationState.Error);
+                    throw new InvalidOperationException($"工位 {Id} 心跳返回 false");
+                }
+            }
+            catch (TimeoutException)
+            {
+                SetState(StationState.Error);
+                throw new TimeoutException($"工位 {Id} 心跳超时（1秒）");
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                SetState(StationState.Error);
+                throw new InvalidOperationException($"工位 {Id} 心跳异常: {ex.Message}", ex);
+            }
+
+            // --- 一次性信号判断 ---
+            bool signalDetected;
+            try
+            {
+                signalDetected = await _handler.WaitForSignalAsync(token);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                SetState(StationState.Error);
+                throw new InvalidOperationException($"工位 {Id} 信号判断异常: {ex.Message}", ex);
+            }
+
+            // --- 执行动作（仅当有信号）---
+            if (signalDetected)
+            {
+                try
+                {
+                    await _handler.ExecuteActionAsync(token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    SetState(StationState.Error);
+                    throw new InvalidOperationException($"工位 {Id} 执行动作异常: {ex.Message}", ex);
+                }
+            }
+            else
+            {
+                // 无信号时短暂休眠，避免CPU空转（若 WaitForSignalAsync 内部阻塞则可省略）
+                await Task.Delay(50, token);
+            }
+        }
+    }
+
+    private void SetState(StationState newState)
+    {
+        State = newState;
+        _onStateChanged?.Invoke(Id, newState);
+    }
+}
+```
+
+### 2. 全局自动机（Automaton）
+
+```csharp
+public class Automaton
+{
+    private readonly List<Station> _stations = new();
+    private CancellationTokenSource? _cts;
+    private Task[]? _stationTasks;
+    private int _isRunning = 0;
+
+    public AutomatonState State { get; private set; } = AutomatonState.Stopped;
+
+    /// <summary>
+    /// 添加工位处理器（必须在 StartAsync 前调用）
+    /// </summary>
+    /// <param name="handler">工位处理器实现</param>
+    /// <param name="stationId">可选工位ID，不传则自动递增</param>
+    public void AddStation(IStationHandler handler, int? stationId = null)
+    {
+        if (State != AutomatonState.Stopped)
+            throw new InvalidOperationException("自动机已启动，无法添加工位");
+
+        int id = stationId ?? _stations.Count + 1;
+        _stations.Add(new Station(id, handler, OnStationStateChanged));
+    }
+
+    private void OnStationStateChanged(int stationId, StationState newState)
+    {
+        Console.WriteLine($"工位 {stationId} 状态 → {newState}");
+        // 可扩展：记录日志、发送通知等
+    }
+
+    public async Task StartAsync()
+    {
+        if (Interlocked.Exchange(ref _isRunning, 1) == 1)
+            throw new InvalidOperationException("自动机已在运行中");
+
+        try
+        {
+            if (_stations.Count == 0)
+                throw new InvalidOperationException("请先添加工位");
+
+            _cts = new CancellationTokenSource();
+            State = AutomatonState.Running;
+
+            _stationTasks = _stations
+                .Select(s => Task.Run(() => s.RunAsync(_cts.Token), _cts.Token))
+                .ToArray();
+
+            // 捕获第一个异常
+            var faultTcs = new TaskCompletionSource<Exception>();
+            foreach (var task in _stationTasks)
+            {
+                _ = task.ContinueWith(t =>
+                {
+                    if (t.IsFaulted && t.Exception != null)
+                        faultTcs.TrySetException(t.Exception.InnerExceptions);
+                }, TaskContinuationOptions.OnlyOnFaulted);
+            }
+
+            Task completedTask = await Task.WhenAny(
+                Task.WhenAll(_stationTasks),
+                faultTcs.Task
+            );
+
+            if (completedTask == faultTcs.Task)
+            {
+                State = AutomatonState.Error;
+                try { await faultTcs.Task; }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"自动机异常停止: {ex.Message}");
+                }
+            }
+            else
+            {
+                State = AutomatonState.Stopped;
+            }
+        }
+        finally
+        {
+            await StopInternalAsync();
+            Interlocked.Exchange(ref _isRunning, 0);
+        }
+    }
+
+    public async Task StopAsync()
+    {
+        if (State != AutomatonState.Running) return;
+        await StopInternalAsync();
+        State = AutomatonState.Stopped;
+    }
+
+    private async Task StopInternalAsync()
+    {
+        try { _cts?.Cancel(); } catch (ObjectDisposedException) { }
+
+        if (_stationTasks != null)
+        {
+            try
+            {
+                await Task.WhenAll(_stationTasks).WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch (TimeoutException)
+            {
+                Console.WriteLine("部分工位停止超时，强制结束");
+            }
+            catch (AggregateException ex)
+            {
+                foreach (var inner in ex.InnerExceptions)
+                    Console.WriteLine($"停止时残留异常: {inner.Message}");
+            }
+        }
+
+        _cts?.Dispose();
+        _cts = null;
+        _stationTasks = null;
+    }
+}
+```
+
+---
+
+## 使用示例
+
+### 1. 创建工位处理器
+
+```csharp
+public class MySimpleHandler : IStationHandler
+{
+    private readonly int _stationId;
+    private readonly Random _random = new();
+
+    public MySimpleHandler(int stationId)
+    {
+        _stationId = stationId;
+    }
+
+    public async Task<bool> CheckHeartbeatAsync(CancellationToken token)
+    {
+        // 模拟心跳检测，通常查询硬件是否在线
+        await Task.Delay(100, token);
+        return true; // 假设始终健康
+    }
+
+    public async Task<bool> WaitForSignalAsync(CancellationToken token)
+    {
+        // 模拟信号等待：每隔 500~2000ms 有 60% 概率捕获信号
+        await Task.Delay(_random.Next(500, 2000), token);
+        return _random.Next(100) < 60;
+    }
+
+    public async Task ExecuteActionAsync(CancellationToken token)
+    {
+        Console.WriteLine($"    工位 {_stationId} 执行动作...");
+        await Task.Delay(300, token);
+    }
+}
+```
+
+### 2. 组装并启动
+
+```csharp
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        var automaton = new Automaton();
+
+        // 动态添加工位（例如8个）
+        for (int i = 1; i <= 8; i++)
+        {
+            automaton.AddStation(new MySimpleHandler(i));
+        }
+
+        try
+        {
+            Console.WriteLine("自动机启动...");
+            await automaton.StartAsync();
+            Console.WriteLine($"自动机最终状态: {automaton.State}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"主程序捕获异常: {ex.Message}");
+        }
+    }
+}
+```
+
+---
+
+## 设计要点
+
+| 关注点 | 实现方式 |
+|--------|----------|
+| **解耦** | 所有业务逻辑（信号获取、动作、心跳）均通过 `IStationHandler` 注入 |
+| **动态工位** | `AddStation` 方法支持运行时添加，数量不限 |
+| **并发安全** | `Interlocked.Exchange` 防止自动机与工位重复启动 |
+| **全局停止** | 统一 `CancellationTokenSource`，任一工位异常即取消所有任务 |
+| **心跳超时** | 框架在 `CheckHeartbeatAsync` 外层施加 `WaitAsync(1秒)` |
+| **信号驱动** | 仅在 `WaitForSignalAsync` 返回 `true` 时才执行 `ExecuteActionAsync` |
+| **错误处理** | 异常被集中捕获，自动机状态置为 `Error` 并记录 |
+
+---
+
+## 接入指南
+
+1. 为每个物理/逻辑工位实现 `IStationHandler` 接口的三个方法。
+2. 创建 `Automaton` 实例，通过 `AddStation` 添加所有工位。
+3. 调用 `await automaton.StartAsync()` 启动。
+4. 如需主动停止，调用 `await automaton.StopAsync()`。
+
+> **注意事项**  
+> - `CheckHeartbeatAsync` 应尽量快速返回，避免接近 1 秒超时线。  
+> - `WaitForSignalAsync` 可设计为阻塞等待，也可进行纯判断快速返回。  
+> - 框架已包含防重入逻辑，切勿对同一 `Automaton` 重复调用 `StartAsync`。
+```

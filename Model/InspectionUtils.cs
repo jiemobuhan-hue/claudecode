@@ -11,19 +11,35 @@ namespace ZenergyBFSI.Model
         // ── 看板数据 ──────────────────────────────────────────────────
         public class DashboardData
         {
+            // ── KPI ──────────────────────────────────────────────────
             public int Total { get; set; }
             public int Ok { get; set; }
             public int Ng { get; set; }
-            public double YieldRate { get; set; }   // 0~100
+            public double YieldRate { get; set; }
 
-            public List<HourlyData> Hourly { get; set; } = new List<HourlyData>();
-            public List<NgTypeData> NgTypes { get; set; } = new List<NgTypeData>();
-            public List<RecentRecord> Recent { get; set; } = new List<RecentRecord>();
+            // ── 图表 ─────────────────────────────────────────────────
+            public System.Collections.Generic.List<HourlyData> Hourly { get; set; }
+            public System.Collections.Generic.List<NgTypeData> NgTypes { get; set; }
+            public System.Collections.Generic.List<RecentRecord> Recent { get; set; }
+
+            // ── 分页（Bug 6 新增）────────────────────────────────────
+            /// <summary>
+            /// 数据库时间窗口（最近12小时）内的真实总记录数，由 DashboardWorker 的 COUNT(*) 查询返回。
+            /// 用于前端计算 _totalPages = ceil(TotalCount / PageSize)。
+            /// 注意：Total（KPI）是"当前页已出站记录数"，与 TotalCount（分页用途）含义不同。
+            /// </summary>
+            public int TotalCount { get; set; }
+
+            /// <summary>
+            /// 当前数据对应的页码（0-based），由 DashboardWorker._pageIndex 透传。
+            /// 前端收到更新时应将 _currentPage 同步为此值，而非无条件归零。
+            /// </summary>
+            public int PageIndex { get; set; }
         }
 
         public class HourlyData
         {
-            public string Hour { get; set; } = "";  // "08:00"
+            public int Hour { get; set; } = 0;  // "08:00"
             public int Ok { get; set; }
             public int Ng { get; set; }
         }

@@ -1,11 +1,7 @@
-﻿ 
+﻿
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Policy;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -23,198 +19,11 @@ using DevExpress.Xpf.Charts;
 using Color = System.Windows.Media.Color;
 using Colors = System.Windows.Media.Colors;
 using ZenergyBFSI.Service;
+using ZenergyBFSI.Model.Messages;
+using DevExpress.Mvvm;
 
 namespace ZenergyBFSI.View.StateCards
 {
-    ///// <summary>
-    ///// UC_StatesCards.xaml 的交互逻辑
-    ///// </summary>
-    //public partial class UC_StatesCards : UserControl
-    //{
-    //    private readonly DispatcherTimer _clockTimer;
-
-    //    public UC_StatesCards()
-    //    {
-    //        InitializeComponent();
-
-    //        // 初始化时钟
-    //        _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-    //        _clockTimer.Tick += (s, e) => TxtClock.Text = DateTime.Now.ToString("HH:mm:ss");
-    //        _clockTimer.Start();
-
-    //        // 设置今日日期
-    //        DpDate.SelectedDate = DateTime.Today;
-
-    //        // TODO: 绑定 RefreshButton Click 事件，调用你的数据加载逻辑
-    //        BtnRefresh.Click += (s, e) => LoadData();
-
-    //        // TODO: 初始加载
-    //        LoadData();
-    //    }
-
-    //    // ── 你只需要填充这两个方法 ─────────────────────────────────
-
-    //    /// <summary>加载看板数据，更新所有命名控件</summary>
-    //    private void LoadData()
-    //    {
-    //        // 示例：直接操作命名元素（也可改为 ViewModel 绑定）
-    //        // TxtTotal.Text = data.Total.ToString();
-    //        // TxtOk.Text    = data.Ok.ToString();
-    //        // TxtNg.Text    = data.Ng.ToString();
-    //        // TxtRate.Text  = $"{data.YieldRate:F2}%";
-    //        // DgRecords.ItemsSource = data.Records;
-    //        // UpdateStatusLight(data.LastResult);
-    //    }
-
-    //    /// <summary>更新状态大灯颜色与文字</summary>
-    //    public void UpdateStatusLight(string result)
-    //    {
-    //        // 根据 result ("OK"/"NG") 修改 StatusLight.Fill / StatusGlow.Stroke 颜色
-    //        // 以及 TxtStatus.Text / TxtLastCellCode.Text / TxtLastTime.Text
-    //    }
-
-
-    //    public UC_StatesCards(CsvDataService csv, Func<string, Task> pushJs)
-    //    {
-    //        InitializeComponent();
-    //        _csv = csv;
-    //        _pushJs = pushJs;
-    //        Loaded += OnLoaded;
-    //        Unloaded += OnUnloaded;
-    //    }
-
-    //    private readonly CsvDataService _csv;
-    //    private readonly Func<string, Task> _pushJs;   // 封装 ExecuteScriptAsync
-
-    //    private DateTime _date = DateTime.Today;
-    //    private string _shift = "all";
-
-    //    private DispatcherTimer _dashTimer = null;
-    //    private DispatcherTimer _liveTimer = null;
-
-    //    // ── 生命周期 ──────────────────────────────────────────────
-    //    private void OnLoaded(object sender, RoutedEventArgs e)
-    //    {
-    //        _dashTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
-    //        _dashTimer.Tick += async (_, __) => await RefreshDashAsync();
-    //        _dashTimer.Start();
-
-    //        _liveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-    //        _liveTimer.Tick += async (_, __) => await RefreshLiveAsync();
-    //        _liveTimer.Start();
-    //    } 
-    //    private void OnUnloaded(object sender, RoutedEventArgs e)
-    //    {
-    //        _dashTimer?.Stop();
-    //        _liveTimer?.Stop();
-    //    }
-
-    //    // ── 接收 JS PostMessage（由 MainWindow 路由过来）────────────
-    //    public async Task OnWebMessage(string type, string payload)
-    //    {
-    //        switch (type)
-    //        {
-    //            case "page_ready":
-    //                // JS 已初始化完毕，立即推送一次完整数据
-    //                await RefreshDashAsync();
-    //                await RefreshLiveAsync();
-    //                break;
-
-    //            case "refresh":
-    //                await RefreshDashAsync();
-    //                await RefreshLiveAsync();
-    //                break;
-
-    //            case "date_changed":
-    //                if (DateTime.TryParse(payload, out var d))
-    //                {
-    //                    _date = d;
-    //                    await RefreshDashAsync();
-    //                }
-    //                break;
-
-    //            case "shift_changed":        // payload: "all"|"A"|"B"|"C"
-    //                _shift = payload;
-    //                await RefreshDashAsync();
-    //                break;
-    //        }
-    //    }
-
-    //    // ── 刷新看板 ─────────────────────────────────────────────
-    //    private async Task RefreshDashAsync()
-    //    {
-    //        try
-    //        {
-    //            // 最简写法：CsvDataService 直接返回 JSON 字符串，无需二次序列化
-    //            string json = _csv.GetDashboardSummaryJson(_date);
-
-    //            // 若需要班次过滤，对 DTO 做处理后再序列化：
-    //            // var dto = FilterByShift(json, _shift);
-    //            // json = JsonSerializer.Serialize(dto);
-
-    //            // 调用 JS 全局函数 window.updateDashboard(json)
-    //            await _pushJs($"updateDashboard({json})");
-    //        }
-    //        catch (Exception ex)
-    //        {
-    //            System.Diagnostics.Debug.WriteLine($"[Dashboard] Dash error: {ex.Message}");
-    //        }
-    //    }
-
-    //    // ── 刷新状态灯 ────────────────────────────────────────────
-    //    private async Task RefreshLiveAsync()
-    //    {
-    //        try
-    //        {
-    //            string json = _csv.GetLiveStatusJson();
-    //            await _pushJs($"updateLiveStatus({json})");
-    //        }
-    //        catch (Exception ex)
-    //        {
-    //            System.Diagnostics.Debug.WriteLine($"[Dashboard] Live error: {ex.Message}");
-    //        }
-    //    }
-
-    //    // ── 班次过滤示例（可选）──────────────────────────────────
-    //    private static DashboardDto FilterByShift(string rawJson, string shift)
-    //    {
-    //        var dto = JsonSerializer.Deserialize<DashboardDto>(rawJson,
-    //            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-    //        if (shift == "all" || dto.Hourly == null) return dto;
-    //        var (hFrom, hTo) = (0, 23);
-    //        switch (shift)
-    //        {
-    //            case "A": (hFrom, hTo) = (0, 7);break;
-    //            case "B": (hFrom, hTo) = (8, 15); break;
-    //            case "C": (hFrom, hTo) = (16, 23); break;
-    //        }
-    //        //var (hFrom, hTo) = shift switch
-    //        //{
-    //        //    "A" => (0, 7),
-    //        //    "B" => (8, 15),
-    //        //    "C" => (16, 23),
-    //        //    _ => (0, 23)
-    //        //};
-
-    //        dto.Hourly = dto.Hourly.FindAll(h =>
-    //            int.TryParse(h.Hour?.Split(':')[0], out int hh) && hh >= hFrom && hh <= hTo);
-
-    //        dto.Ok = dto.Hourly.Sum(h => h.Ok);
-    //        dto.Ng = dto.Hourly.Sum(h => h.Ng);
-    //        dto.Total = dto.Ok + dto.Ng;
-    //        dto.YieldRate = dto.Total > 0 ? Math.Round(dto.Ok * 100.0 / dto.Total, 2) : 0;
-    //        return dto;
-    //    }
-
-    //    // ── 外部触发：如 PLC 信号来了直接推 ─────────────────────
-    //    /// <summary>外部调用：强制立即刷新状态灯（如 PLC 触发）</summary>
-    //    public async Task ForceRefreshLive() => await RefreshLiveAsync();
-
-    //    /// <summary>外部调用：强制立即刷新完整看板</summary>
-    //    public async Task ForceRefreshDash() => await RefreshDashAsync();
-    //}  
-
     /// <summary>
     /// UC_StatesCards.xaml 的交互逻辑
     /// </summary>
@@ -237,22 +46,25 @@ namespace ZenergyBFSI.View.StateCards
         /// <summary>更新全部看板数据（KPI、图表、记录）</summary>
         public void UpdateDashboard(DashboardData data)
         {
-            Dispatcher.InvokeAsync(() =>
+            Dispatcher.Invoke(() =>
             {
                 _lastData = data;
 
-                // 分页更新：从 data 中获取总页数（需 DashboardData 提供 TotalPages 字段）
-                // 暂时使用记录数估算，后续应从 data.TotalPages 获取
-                int pageSize = 20; // 每页记录数，需与后端保持一致
-                int totalRecords = data.Recent?.Count ?? 0;
-                _totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
-                _currentPage = 0;
+                // Bug 5+6+7 修复：
+                // 1. _totalPages 必须使用服务端返回的总记录数（data.TotalCount），
+                //    而非当页记录数（data.Recent.Count ≤ PageSize = 500），否则永远算出 1 页。
+                // 2. _currentPage 应跟随服务端回传的 PageIndex，
+                //    而非无条件归零（归零会使翻页操作在下一次刷新后被撤销）。
+                int pageSize = DashboardWorker.PageSize;
+                int dbTotal = data.TotalCount;  // 数据库窗口内的真实总记录数
+                _totalPages = Math.Max(1, (int)Math.Ceiling(dbTotal / (double)pageSize));
+                _currentPage = data.PageIndex;  // 与后端保持同步，不强制归零
 
                 ApplyKpi(data);
                 ApplyNgTypes(data.NgTypes);
                 ApplyRecords(data.Recent);
 
-                RedrawHourly();   // 依赖画布尺寸，延迟触发
+                RedrawHourly();
             });
         }
 
@@ -262,7 +74,6 @@ namespace ZenergyBFSI.View.StateCards
             Dispatcher.InvokeAsync(() => ApplyStatusLight(result, cellCode, time));
         }
 
-        /// <summary>返回当前选中日期（可为 null）</summary>
         public DateTime? SelectedDate => DpDate.SelectedDate;
 
         /// <summary>返回当前选中班次</summary>
@@ -311,17 +122,20 @@ namespace ZenergyBFSI.View.StateCards
 
             DpDate.SelectedDate = DateTime.Today;
 
-            //StartClock();
+            StartClock();
             Loaded += (_, __) =>
             {
-                // 订阅看板消息（在 UC_Home 之后，确保消息链路建立）
-                Messenger.Default.Register<DashboardUpdateMessage>(this, OnDashboardUpdateMessage);
-                Messenger.Default.Register<StatusLightUpdateMessage>(this, OnStatusLightUpdateMessage);
+                // Bug 4 修复：移除此处重复的 Messenger 订阅。
+                // DashboardUpdateMessage / StatusLightUpdateMessage 已由 UC_Home.OnLoaded 订阅，
+                // UC_Home 会直接调用 _dash.UpdateDashboard() / _dash.UpdateStatusLight()。
+                // 若在此处重复注册，每条消息会触发 UpdateDashboard 两次，导致 _currentPage 被二次重置。
+                // Messenger.Default.Register<DashboardUpdateMessage>(this, OnDashboardUpdateMessage);
+                // Messenger.Default.Register<StatusLightUpdateMessage>(this, OnStatusLightUpdateMessage);
 
-                // 启动模拟（构造函数中调用时 UC_Home.OnLoaded 还未执行，消息订阅未建立）
-                DashboardService.I.StartSimulation(10);
+                //RedrawHourly();
 
-                RedrawHourly();
+                // 直接调用 UpdateDashboard 渲染测试数据（不依赖数据库）
+                //DashboardWorkerTests.RunTests(this);
             };
             DataContext = this;
         }
@@ -336,13 +150,101 @@ namespace ZenergyBFSI.View.StateCards
             UpdateStatusLight(msg.Result, msg.CellCode, msg.Time);
         }
 
- 
+
 
         private void StartClock()
         {
             _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _clockTimer.Tick += (_, __) =>
+            {
+
                 TxtClock.Text = DateTime.Now.ToString("HH:mm:ss");
+
+                #region 测试数据
+                var now = DateTime.Now;
+                var windowStart = now.AddHours(-12);  // 与 QueryAndParse 的 windowStart 一致
+
+                // Bug 9 修复：在循环内 new Random() 时，多个实例在同一毫秒内拥有相同 TickCount 种子，
+                // 导致所有 12 个小时桶产生完全相同的 OK/NG 值，测试数据无意义。
+                // 修复：使用单一 Random 实例贯穿整个构造过程。
+                var rng = new Random();
+
+                // 时段数据：12个小时桶，hour 值必须与 windowStart.Hour + i 对齐
+                var hourly = new List<HourlyData>();
+                for (int i = 0; i < 12; i++)
+                {
+                    int hour = (windowStart.Hour + i) % 24;
+                    int ok = 30 + rng.Next(10);  // 每小时30-39条OK
+                    int ng = 3 + rng.Next(4);    // 每小时3-6条NG
+                    hourly.Add(new HourlyData
+                    {
+                        Hour = hour,  // "HH:00" 格式，与 ParseRecords 一致
+                        Ok = ok,
+                        Ng = ng
+                    });
+                }
+
+                // KPI汇总：基于 hourly 总数，与 ParseRecords 逻辑一致
+                int total = hourly.Sum(h => h.Ok + h.Ng);
+                int okCount = hourly.Sum(h => h.Ok);
+                int ngCount = hourly.Sum(h => h.Ng);
+                double yieldRate = total > 0 ? okCount * 100.0 / total : 0;
+
+                // NG类型数据：8种类型，模拟真实分布
+                var ngTypes = new List<NgTypeData>
+            {
+                new NgTypeData { Name = "外观划伤", Count = 30 + rng.Next(10) },
+                new NgTypeData { Name = "气泡",     Count = 32+ rng.Next(10) },
+                new NgTypeData { Name = "色差",     Count = 18 + rng.Next(10)},
+                new NgTypeData { Name = "变形",     Count = 12 + rng.Next(10)},
+                new NgTypeData { Name = "污渍",     Count = 8+ rng.Next(10) },
+                new NgTypeData { Name = "凹陷",     Count = 5 + rng.Next(10)},
+                new NgTypeData { Name = "凸点",     Count = 3 + rng.Next(10)},
+                new NgTypeData { Name = "裂纹",     Count = 2 + rng.Next(10)}
+            };
+
+                // 最近记录：20条，时间分布在12小时窗口内（而非全挤在最近1小时）
+                var recent = new List<RecentRecord>();
+                var stations = new[] { "工位1", "工位2", "工位3", "工位4" };
+                var ngTypeList = new[] { "外观划伤", "气泡", "色差" };
+
+                for (int i = 0; i < 20; i++)
+                {
+                    // 时间均匀分布在12小时窗口内
+                    double t = (double)i / 20.0;  // 0.0 ~ 0.95
+                    var entryTime = windowStart.AddMinutes(t * 12 * 60);
+
+                    bool isInbound = i < 3;  // 前3条进站
+                    bool isNg = !isInbound && i % 4 == 0;  // 出站中约25%NG
+
+                    recent.Add(new RecentRecord
+                    {
+                        CellCode = $"TEST{i + 1:D4}",
+                        DateTime = entryTime.ToString("yyyy/MM/dd HH:mm:ss"),
+                        StationId = stations[i % 4],
+                        OverallResult = isInbound ? "OK" : (isNg ? "NG" : "OK"),
+                        NgTypes = isNg ? $"{ngTypeList[i % 3]}|{ngTypeList[(i + 1) % 3]}" : "",
+                        ProcessMs = isInbound ? 0 : 30000 + rng.Next(60000),  // 复用上方 rng 实例
+                        IsInbound = isInbound
+                    });
+                }
+
+                var data= new DashboardData
+                {
+                    Total = total,
+                    Ok = okCount,
+                    Ng = ngCount,
+                    YieldRate = yieldRate,
+                    Hourly = hourly,
+                    NgTypes = ngTypes,
+                    Recent = recent,
+                    TotalCount = total,   // 模拟场景：总记录数 = 当前页记录数（单页测试）
+                    PageIndex = 0         // 测试始终从第0页开始
+                };
+                this.UpdateDashboard(data); 
+                #endregion
+
+            };
             _clockTimer.Start();
         }
 
@@ -365,54 +267,43 @@ namespace ZenergyBFSI.View.StateCards
             _hourlyData = d.Hourly;
         }
 
-        // ════════════════════════════════════════════════════════
-        //  时段产量 Canvas 绘图
-        // ════════════════════════════════════════════════════════
-        //private void HourlyCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => RedrawHourly();
-        //public class HourlyChartsViewModel
-        //{
-        //    public int[] Values1 { get; set; } = new int[] { 4, 7, 1 };
-        //    public int[] Values2 { get; set; } = new int[] { 3, 2, 1 };
-        //    public int[] Values3 { get; set; } = new int[] { 4, 6, 6 };
-        //    public int[] Values4 { get; set; } = new int[] { 3, 7, 9 };
-        //    public string[] Labels { get; set; } = new string[] { "时段一", "时段二", "时段三" };
 
-        //}
-
-
-        private void RedrawHourly()
+        public void RedrawHourly()
         {
-            // 从 _hourlyData 动态绑定到 ChartControl
             if (_hourlyData == null || _hourlyData.Count == 0) return;
-
+            #region 可疑代码 
             var diagram = NgHourlyChart?.Diagram as XYDiagram2D;
             if (diagram == null) return;
 
-            // 清除现有 series
             diagram.Series.Clear();
 
-            // 构建 OK 和 NG 两个 series
             var okSeries = new BarStackedSeries2D
             {
                 DisplayName = "OK 产量",
                 Brush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
                 LabelsVisibility = true
             };
+            okSeries.Label = new SeriesLabel { TextPattern = "{V}" };
+
             var ngSeries = new BarStackedSeries2D
             {
                 DisplayName = "NG 产量",
                 Brush = new SolidColorBrush(Color.FromRgb(0xF4, 0x43, 0x36)),
                 LabelsVisibility = true
             };
+            ngSeries.Label = new SeriesLabel { TextPattern = "{V}" };
 
             foreach (var h in _hourlyData)
             {
                 okSeries.Points.Add(new SeriesPoint(h.Hour, h.Ok));
                 ngSeries.Points.Add(new SeriesPoint(h.Hour, h.Ng));
-            }
 
+            }
             diagram.Series.Add(okSeries);
             diagram.Series.Add(ngSeries);
+            #endregion
+
+
         }
 
         private void ApplyNgTypes(List<NgTypeData> types)
@@ -445,8 +336,12 @@ namespace ZenergyBFSI.View.StateCards
                 StationId = r.StationId,
                 OverallResult = r.OverallResult,
                 ProcessMs = r.ProcessMs,
+                // Bug 8 修复：空 NgTypes 字符串 Split('|') 会产生 [""]，
+                // 导致 DataGrid NG 类型列出现空 badge。过滤掉空项。
                 NgTypeList = (r.NgTypes ?? "")
-                .Split('|').ToList(),
+                    .Split('|')
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .ToList(),
                 IsInbound = r.IsInbound
             }).ToList();
 

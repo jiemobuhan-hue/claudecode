@@ -1,0 +1,57 @@
+<Window x:Class="LoginProject.SessionLogoutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="退出确认"
+        Height="200"
+        Width="350"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{DynamicResource MaterialDesign.Brush.Background}">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 标题和图标 -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,20">
+            <materialDesign:PackIcon Kind="Logout"
+                                     Width="32"
+                                     Height="32"
+                                     VerticalAlignment="Center"
+                                     Foreground="{DynamicResource MaterialDesign.Brush.Primary}"/>
+            <TextBlock Text="退出登录"
+                       FontSize="20"
+                       FontWeight="Bold"
+                       VerticalAlignment="Center"
+                       Margin="10,0,0,0"/>
+        </StackPanel>
+
+        <!-- 提示信息 -->
+        <TextBlock Grid.Row="1"
+                   Text="确定要退出当前登录吗？"
+                   FontSize="14"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Opacity="0.8"/>
+
+        <!-- 按钮区域 -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="取消"
+                    Style="{StaticResource MaterialDesignFlatButton}"
+                    Margin="0,0,10,0"
+                    Click="btnCancel_Click"/>
+            <Button x:Name="btnConfirm"
+                    Content="确定退出"
+                    Style="{StaticResource MaterialDesignRaisedButton}"
+                    Click="btnConfirm_Click">
+                <Button.Background>
+                    <SolidColorBrush Color="#f44336"/>
+                </Button.Background>
+            </Button>
+        </StackPanel>
+    </Grid>
+</Window>

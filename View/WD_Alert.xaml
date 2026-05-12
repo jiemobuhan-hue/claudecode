@@ -1,0 +1,31 @@
+﻿<Window x:Class="ZenergyBFSI.View.WD_Alert"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:ZenergyBFSI.View"
+        mc:Ignorable="d"  d:Height="1080" d:Width="1920"
+        
+        Title="WD_Alert" 
+        SizeToContent="WidthAndHeight" 
+        Grid.IsSharedSizeScope="True" 
+        AllowDrop="True" 
+        ScrollViewer.VerticalScrollBarVisibility="Disabled" 
+        VerticalContentAlignment="Stretch" 
+        HorizontalContentAlignment="Stretch"
+        ResizeMode="CanMinimize" 
+        WindowStartupLocation="CenterScreen" 
+        Topmost="True"
+        ShowInTaskbar="False" AllowsTransparency="False" 
+        WindowStyle="None">
+    <Grid x:Name="main" Style="{DynamicResource gridStyle_BG}">
+        <StackPanel Width="120" Height="120" Background="Transparent" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,50,50,0">
+            <Button Visibility="Visible" Width="120" Height="120" Style="{DynamicResource btnStyle_Close}" Click="Close_Click"/>
+        </StackPanel>
+        <Label Margin="100,-300,0,0" FontSize="180" Foreground="#FFC82121" FontFamily="宋体" HorizontalAlignment="Center" VerticalAlignment="Center">MOM报警</Label>
+        <Button Width="200" Height="200" Margin="-750,-300,0,0" Style="{DynamicResource btnStyle_Alert}"/>
+        <Label FontSize="100" Width="1280" Foreground="#dddddd" FontFamily="宋体" Margin="0,200,0,0" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock TextWrapping="Wrap" x:Name="tbMsg"/>
+        </Label>
+    </Grid>
+</Window>

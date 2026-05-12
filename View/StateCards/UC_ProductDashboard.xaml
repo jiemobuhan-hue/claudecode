@@ -1,0 +1,121 @@
+﻿<UserControl x:Class="ZenergyBFSI.View.StateCards.UC_ProductDashboard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:ZenergyBFSI.View.StateCards"
+             mc:Ignorable="d"  
+             
+             d:DesignHeight="759" d:DesignWidth="1427">
+    <Grid Margin="0,0,0,10">
+      
+       
+            <Border Width="1280" Height="720" CornerRadius="16" >
+                <Border.Background > 
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0" >
+                            <GradientStop Color="#FFEDF2F7" Offset="1"/>
+                        <GradientStop Color="#FBFBFB" Offset="0"/>
+                        </LinearGradientBrush> 
+                </Border.Background>
+
+                <Border Margin="30" Background="#FBFBFB" CornerRadius="12">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="15" Opacity="0.3" ShadowDepth="2"/>
+                    </Border.Effect>
+
+                    <Grid Margin="20">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="1.2*"/>
+                            <RowDefinition Height="2*"/>
+                        </Grid.RowDefinitions>
+
+                        <DockPanel Grid.Row="0" LastChildFill="False" Margin="10,0,10,20">
+                            <StackPanel DockPanel.Dock="Left">
+                                <TextBlock Text="设备产量统计详情" FontSize="18" FontWeight="Bold"/>
+                                <TextBlock Text="蓝膜外观检测良率、产量与运行趋势" FontSize="14" Foreground="#075EAD"/>
+                            </StackPanel>
+                            <Image DockPanel.Dock="Right" Source="/Logo.png" Width="240" Height="40" Opacity="0.8"/>
+                        </DockPanel>
+
+                        <UniformGrid Grid.Row="1" Columns="2">
+                            <Border Background="White" Margin="10" CornerRadius="10" BorderBrush="#EEE" BorderThickness="1">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="40"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="产量指标" VerticalAlignment="Center" Margin="15,0" FontWeight="SemiBold"/>
+                                    <Separator VerticalAlignment="Bottom" Background="#F0F0F0"/>
+
+                                    <UniformGrid Grid.Row="1" Columns="3" VerticalAlignment="Center">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="总产量" FontSize="15" Foreground="#FF690606"/>
+                                            <TextBlock Text="$ 67.381 Mi" FontSize="16" FontWeight="Bold" Margin="0,5"/>
+                                            <TextBlock Text="9.42% ⬆️" FontSize="10" Foreground="Green"/>
+                                        </StackPanel>
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="NG产品类型一统计" FontSize="15" Foreground="#FF690606"/>
+                                            <TextBlock Text="15.530 Mil" FontSize="16" FontWeight="Bold" Margin="0,5"/>
+                                            <TextBlock Text="8.22% ⬆️" FontSize="10" Foreground="Green"/>
+                                        </StackPanel>
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="产品类型二统计" FontSize="15" Foreground="#FF690606"/>
+                                            <TextBlock Text="65.959 Mil" FontSize="16" FontWeight="Bold" Margin="0,5"/>
+                                            <TextBlock Text="10.54% ⬆️" FontSize="10" Foreground="Green"/>
+                                        </StackPanel>
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="产品类型三统计" FontSize="15" Foreground="#FF690606"/>
+                                            <TextBlock Text="65.959 Mil" FontSize="16" FontWeight="Bold" Margin="0,5"/>
+                                            <TextBlock Text="10.54% ⬆️" FontSize="10" Foreground="Green"/>
+                                        </StackPanel>
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="产品类型四统计" FontSize="15" Foreground="#FF690606"/>
+                                            <TextBlock Text="65.959 Mil" FontSize="16" FontWeight="Bold" Margin="0,5"/>
+                                            <TextBlock Text="10.54% ⬆️" FontSize="10" Foreground="Green"/>
+                                        </StackPanel>
+                                    </UniformGrid>
+                                </Grid>
+                            </Border>
+
+                            <Border Background="White" Margin="10" CornerRadius="10" BorderBrush="#EEE" BorderThickness="1">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="40"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="1" Text="Volume por Setor" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#999"/>
+                                    <TextBlock Text="产量统计" VerticalAlignment="Center" Margin="15,0" FontWeight="SemiBold" />
+                                    <Separator VerticalAlignment="Bottom" Background="#F0F0F0"/>
+                                </Grid>
+
+                            </Border>
+                        </UniformGrid>
+
+                        <Border Grid.Row="2" Background="White" Margin="10" CornerRadius="10" BorderBrush="#EEE" BorderThickness="1">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="50"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <StackPanel Orientation="Horizontal" Margin="15,0">
+                                    <TextBlock Text="折线图预览功能项一" VerticalAlignment="Center" Margin="10,0"  FontWeight="SemiBold"/>
+                                    <RadioButton Style="{StaticResource {x:Type ToggleButton}}" Width="50" IsChecked="True"/>
+                                    <TextBlock Text="折线图预览功能项二" VerticalAlignment="Center" Margin="10,0"  FontWeight="SemiBold"/>
+                                    <RadioButton   Style="{StaticResource {x:Type ToggleButton}}" Width="50" Margin="10,0"/>
+                                </StackPanel>
+
+                                <Grid Grid.Row="1" Margin="20">
+                                    <Canvas Background="#F9F9F9">
+                                        <TextBlock Text="[此处放置历史趋势折线图]" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#CCC"/>
+                                    </Canvas>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Border>
+       
+    </Grid>
+</UserControl>

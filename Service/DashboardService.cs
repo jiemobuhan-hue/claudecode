@@ -1,8 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
-using System.Windows.Threading;
 using DevExpress.Mvvm;
 using ZenergyBFSI.Model;
 using ZenergyBFSI.Model.Messages;
@@ -54,6 +51,11 @@ namespace ZenergyBFSI.Service
         {
             lock (_syncRoot)
             {
+                // Bug 6 ĞŞ¸´£º
+                // Ô­ÊµÏÖÎ´½« DashboardSnapshot.TotalCount / PageIndex ´«Èë DashboardData£¬
+                // µ¼ÖÂÇ°¶ËÎŞ·¨µÃÖªÊı¾İ¿â´°¿ÚÄÚµÄÕæÊµ×Ü¼ÇÂ¼Êı£¬_totalPages ÓÀÔ¶Ëã³ö 1¡£
+                // TotalCount = Êı¾İ¿âÊ±¼ä´°¿ÚÄÚ COUNT(*) ½á¹û£¨QueryAndParse ÖĞÒÑ²éÑ¯£©
+                // PageIndex  = Worker µ±Ç°Ò³Ë÷Òı£¨·ÖÒ³·­Ò³Ê±ÓÉ SetPage() ¸üĞÂ£©
                 return new DashboardData
                 {
                     Total = _currentSnapshot.Total,
@@ -62,7 +64,9 @@ namespace ZenergyBFSI.Service
                     YieldRate = _currentSnapshot.YieldRate,
                     Hourly = _currentSnapshot.Hourly.ToList(),
                     NgTypes = _currentSnapshot.NgTypes.ToList(),
-                    Recent = _currentSnapshot.Recent.ToList()
+                    Recent = _currentSnapshot.Recent.ToList(),
+                    TotalCount = _currentSnapshot.TotalCount,   // ¡û ĞÂÔö£ºÊı¾İ¿âÕæÊµ×ÜÊı£¬ÓÃÓÚ·ÖÒ³¼ÆËã
+                    PageIndex = _currentSnapshot.PageIndex      // ¡û ĞÂÔö£ºµ±Ç°Ò³Ë÷Òı£¬·ÀÖ¹Ç°¶Ë_currentPage±»´íÎóÖØÖÃ
                 };
             }
         }
@@ -70,17 +74,6 @@ namespace ZenergyBFSI.Service
         public void SetPage(int pageIndex) { _worker?.SetPage(pageIndex); }
         public void RequestRefresh() { _worker?.RequestRefresh(); }
         public void Reset() { _worker?.RequestRefresh(); }
-
-        /// <summary>
-        /// å¯åŠ¨æ¨¡æ‹Ÿæ¨¡å¼ï¼ˆå®šæ—¶ç”Ÿæˆéšæœºæµ‹è¯•æ•°æ®ï¼‰
-        /// </summary>
-        /// <param name="intervalSeconds">æ¨¡æ‹Ÿé—´éš”ï¼ˆç§’ï¼‰ï¼Œé»˜è®¤3ç§’</param>
-        public void StartSimulation(int intervalSeconds = 3) { _worker?.StartSimulation(intervalSeconds); }
-
-        /// <summary>
-        /// åœæ­¢æ¨¡æ‹Ÿæ¨¡å¼
-        /// </summary>
-        public void StopSimulation() { _worker?.StopSimulation(); }
 
         private void OnSnapshotReady(object sender, DashboardSnapshot snapshot)
         {

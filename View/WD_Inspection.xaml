@@ -1,0 +1,315 @@
+﻿<Window x:Class="ZenergyBFSI.View.WD_Inspection"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+        xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+        xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+        xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+        xmlns:dxr="http://schemas.devexpress.com/winfx/2008/xaml/ribbon" 
+        
+        xmlns:local="clr-namespace:ZenergyBFSI.View"
+        mc:Ignorable="d"
+        Height="900" Width="1600"
+        Title="智能点检" 
+        AllowDrop="True" 
+        ScrollViewer.VerticalScrollBarVisibility="Disabled" 
+        ResizeMode="NoResize" 
+        WindowStartupLocation="CenterScreen" 
+        Topmost="True" WindowStyle="ThreeDBorderWindow" 
+        Closing="Window_Closing">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="auto"/>
+            <RowDefinition Height="280"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <dxr:RibbonControl Grid.Row="0" RibbonStyle="Office2019" Margin="0,0,0,0" ShowApplicationButton="False" >
+            <dxr:RibbonDefaultPageCategory Caption="defaultCategory">
+                <dxr:RibbonPage Caption="功能">
+                    <dxr:RibbonPageGroup Caption="操作" x:Name="group_sj">
+                        <dxb:BarButtonItem Content="开班点检" ItemClick="BarButtonItem_ItemClick" RibbonStyle="All" LargeGlyph="{dx:DXImage Images/Filter Elements/CheckButtons_32x32.png}" />
+                    </dxr:RibbonPageGroup>
+                </dxr:RibbonPage>
+            </dxr:RibbonDefaultPageCategory>
+        </dxr:RibbonControl>
+        <!--<Grid Grid.Row="1" Margin="10" Background="White">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="8">
+                <Label Style="{StaticResource big}" Margin="0,0,0,0" Content="{Binding Text,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="1" Grid.Column="0">
+                <Label Style="{StaticResource big}">前称重重量1：</Label>
+                <Label Style="{StaticResource big}" Margin="110,0,0,0" Content="{Binding 前称重重量1,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="1" Grid.Column="1">
+                <Label Style="{StaticResource big}">前称重重量2：</Label>
+                <Label Style="{StaticResource big}" Margin="110,0,0,0" Content="{Binding 前称重重量2,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="1" Grid.Column="2">
+                <Label Style="{StaticResource big}">前称重重量3：</Label>
+                <Label Style="{StaticResource big}" Margin="110,0,0,0" Content="{Binding 前称重重量3,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="1" Grid.Column="3">
+                <Label Style="{StaticResource big}">前称重重量4：</Label>
+                <Label Style="{StaticResource big}" Margin="110,0,0,0" Content="{Binding 前称重重量4,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="1" Grid.Column="4">
+                <Label Style="{StaticResource big}">后称重重量1：</Label>
+                <Label Style="{StaticResource big}" Margin="110,0,0,0" Content="{Binding 后称重重量1,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="1" Grid.Column="5">
+                <Label Style="{StaticResource big}">后称重重量2：</Label>
+                <Label Style="{StaticResource big}" Margin="110,0,0,0" Content="{Binding 后称重重量2,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="1" Grid.Column="6">
+                <Label Style="{StaticResource big}">后称重重量3：</Label>
+                <Label Style="{StaticResource big}" Margin="110,0,0,0" Content="{Binding 后称重重量3,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="1" Grid.Column="7">
+                <Label Style="{StaticResource big}">后称重重量4：</Label>
+                <Label Style="{StaticResource big}" Margin="110,0,0,0" Content="{Binding 后称重重量4,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="2" Grid.Column="0">
+                <Label Style="{StaticResource big}">工位1真空变化值1：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位1真空变化值1,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="2" Grid.Column="1">
+                <Label Style="{StaticResource big}">工位1真空变化值2：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位1真空变化值2,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="2" Grid.Column="2">
+                <Label Style="{StaticResource big}">工位1真空变化值3：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位1真空变化值3,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="2" Grid.Column="3">
+                <Label Style="{StaticResource big}">工位1真空变化值4：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位1真空变化值4,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="2" Grid.Column="4">
+                <Label Style="{StaticResource big}">工位1真空变化值5：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位1真空变化值5,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="2" Grid.Column="5">
+                <Label Style="{StaticResource big}">工位1真空变化值6：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位1真空变化值6,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="2" Grid.Column="6">
+                <Label Style="{StaticResource big}">工位1真空变化值7：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位1真空变化值7,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="2" Grid.Column="7">
+                <Label Style="{StaticResource big}">工位1真空变化值8：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位1真空变化值8,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="3" Grid.Column="0">
+                <Label Style="{StaticResource big}">工位2真空变化值1：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位2真空变化值1,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="3" Grid.Column="1">
+                <Label Style="{StaticResource big}">工位2真空变化值2：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位2真空变化值2,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="3" Grid.Column="2">
+                <Label Style="{StaticResource big}">工位2真空变化值3：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位2真空变化值3,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="3" Grid.Column="3">
+                <Label Style="{StaticResource big}">工位2真空变化值4：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位2真空变化值4,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="3" Grid.Column="4">
+                <Label Style="{StaticResource big}">工位2真空变化值5：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位2真空变化值5,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="3" Grid.Column="5">
+                <Label Style="{StaticResource big}">工位2真空变化值6：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位2真空变化值6,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="3" Grid.Column="6">
+                <Label Style="{StaticResource big}">工位2真空变化值7：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位2真空变化值7,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="3" Grid.Column="7">
+                <Label Style="{StaticResource big}">工位2真空变化值8：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位2真空变化值8,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="4" Grid.Column="0">
+                <Label Style="{StaticResource big}">工位3真空变化值1：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位3真空变化值1,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="4" Grid.Column="1">
+                <Label Style="{StaticResource big}">工位3真空变化值2：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位3真空变化值2,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="4" Grid.Column="2">
+                <Label Style="{StaticResource big}">工位3真空变化值3：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位3真空变化值3,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="4" Grid.Column="3">
+                <Label Style="{StaticResource big}">工位3真空变化值4：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位3真空变化值4,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="4" Grid.Column="4">
+                <Label Style="{StaticResource big}">工位3真空变化值5：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位3真空变化值5,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="4" Grid.Column="5">
+                <Label Style="{StaticResource big}">工位3真空变化值6：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位3真空变化值6,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="4" Grid.Column="6">
+                <Label Style="{StaticResource big}">工位3真空变化值7：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位3真空变化值7,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="4" Grid.Column="7">
+                <Label Style="{StaticResource big}">工位3真空变化值8：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位3真空变化值8,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="5" Grid.Column="0">
+                <Label Style="{StaticResource big}">工位4真空变化值1：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位4真空变化值1,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="5" Grid.Column="1">
+                <Label Style="{StaticResource big}">工位4真空变化值2：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位4真空变化值2,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="5" Grid.Column="2">
+                <Label Style="{StaticResource big}">工位4真空变化值3：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位4真空变化值3,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="5" Grid.Column="3">
+                <Label Style="{StaticResource big}">工位4真空变化值4：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位4真空变化值4,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="5" Grid.Column="4">
+                <Label Style="{StaticResource big}">工位4真空变化值5：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位4真空变化值5,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="5" Grid.Column="5">
+                <Label Style="{StaticResource big}">工位4真空变化值6：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位4真空变化值6,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="5" Grid.Column="6">
+                <Label Style="{StaticResource big}">工位4真空变化值7：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位4真空变化值7,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="5" Grid.Column="7">
+                <Label Style="{StaticResource big}">工位4真空变化值8：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位4真空变化值8,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="6" Grid.Column="0">
+                <Label Style="{StaticResource big}">工位5真空变化值1：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位5真空变化值1,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="6" Grid.Column="1">
+                <Label Style="{StaticResource big}">工位5真空变化值2：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位5真空变化值2,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="6" Grid.Column="2">
+                <Label Style="{StaticResource big}">工位5真空变化值3：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位5真空变化值3,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="6" Grid.Column="3">
+                <Label Style="{StaticResource big}">工位5真空变化值4：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位5真空变化值4,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="6" Grid.Column="4">
+                <Label Style="{StaticResource big}">工位5真空变化值5：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位5真空变化值5,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="6" Grid.Column="5">
+                <Label Style="{StaticResource big}">工位5真空变化值6：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位5真空变化值6,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="6" Grid.Column="6">
+                <Label Style="{StaticResource big}">工位5真空变化值7：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位5真空变化值7,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="6" Grid.Column="7">
+                <Label Style="{StaticResource big}">工位5真空变化值8：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位5真空变化值8,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="7" Grid.Column="0">
+                <Label Style="{StaticResource big}">工位6真空变化值1：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位6真空变化值1,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="7" Grid.Column="1">
+                <Label Style="{StaticResource big}">工位6真空变化值2：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位6真空变化值2,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="7" Grid.Column="2">
+                <Label Style="{StaticResource big}">工位6真空变化值3：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位6真空变化值3,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="7" Grid.Column="3">
+                <Label Style="{StaticResource big}">工位6真空变化值4：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位6真空变化值4,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="7" Grid.Column="4">
+                <Label Style="{StaticResource big}">工位6真空变化值5：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位6真空变化值5,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="7" Grid.Column="5">
+                <Label Style="{StaticResource big}">工位6真空变化值6：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位6真空变化值6,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="7" Grid.Column="6">
+                <Label Style="{StaticResource big}">工位6真空变化值7：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位6真空变化值7,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+            <Grid Grid.Row="7" Grid.Column="7">
+                <Label Style="{StaticResource big}">工位6真空变化值8：</Label>
+                <Label Style="{StaticResource big}" Margin="150,0,0,0" Content="{Binding 工位6真空变化值8,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+
+        </Grid>-->
+        <dxg:GridControl Name="dataList"
+                    AutoExpandAllGroups="True"
+                    ItemsSource="{Binding InspectionInfoList,Mode=OneWay,UpdateSourceTrigger=PropertyChanged}"
+                    AllowColumnMRUFilterList="False"
+                    dx:ScrollBarExtensions.ScrollBarMode="TouchOverlap" Grid.Row="2">
+            <dxg:GridControl.View>
+                <dxg:TableView Name="gridView"
+                               AllowEditing="True"
+                               AllowScrollAnimation="True"
+                               AllowSorting="False"
+                               NavigationStyle="Row"
+                               ColumnFilterPopupMode="ExcelSmart"
+                               HighlightItemOnHover="True">
+                    <dxg:TableView.RuntimeLocalizationStrings>
+                        <dxg:GridRuntimeStringCollection>
+                            <dxg:RuntimeStringIdInfo Id="GridGroupPanelText" Value=" "/>
+                        </dxg:GridRuntimeStringCollection>
+                    </dxg:TableView.RuntimeLocalizationStrings>
+                </dxg:TableView>
+            </dxg:GridControl.View>
+            <dxg:GridControl.Columns>
+                <dxg:GridColumn FieldName="点检时间" Header="点检时间" Width="150"/>
+                <!--<dxg:GridColumn FieldName="前称重重量" Header="前称重重量" Width="100"/>
+                <dxg:GridColumn FieldName="后称重重量" Header="后称重重量" Width="100"/>
+                <dxg:GridColumn FieldName="真空变化值" Header="后称重重量" Width="100"/>-->
+            </dxg:GridControl.Columns>
+        </dxg:GridControl>
+    </Grid>
+</Window>

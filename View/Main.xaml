@@ -1,0 +1,80 @@
+﻿<Window xmlns:Bars="clr-namespace:ZenergyBFSI.View.Bars"  x:Class="ZenergyBFSI.View.Main"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+        xmlns:local="clr-namespace:ZenergyBFSI.View"
+        xmlns:view="clr-namespace:ZenergyBFSI.View"
+        Style="{StaticResource MaterialDesignWindow}"
+        mc:Ignorable="d"
+        WindowState="Maximized" 
+        Title="正力新能蓝膜检测智能控制系统" Height="650" Width="1080"
+        Closing="Window_Closing"
+        TextInput="Window_TextInput"
+        Loaded="Window_Loaded"
+        >
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="30"/>
+            <RowDefinition Height="0"/>
+        </Grid.RowDefinitions>
+        <dx:DXTabControl Grid.Row="0" Grid.ColumnSpan="2">
+            <dx:DXTabControl.View>
+                <dx:TabControlStretchView HeaderLocation="Top" HideButtonShowMode="NoWhere" NewButtonShowMode="NoWhere" RemoveTabItemsOnHiding="False" ShowHeaderMenu="False"/>
+            </dx:DXTabControl.View>
+            <dx:DXTabItem x:Name="it_home" 
+                          Header="电芯检测看板" 
+                          ToolTip="首页-电芯检测看板"
+                          Glyph="{dx:DXImage Office2013/Navigation/Home_32x32.png}">
+                <view:UC_Home x:Name="uc_home"/>
+            </dx:DXTabItem>
+            <dx:DXTabItem Header="历史数据" ToolTip="历史数据" Glyph="{dx:DXImage SvgImages/Business Objects/BO_Report.svg}">
+                <view:UC_History x:Name="uc_his"/>
+            </dx:DXTabItem>
+            <dx:DXTabItem x:Name="it_operation" Header="检测结果" ToolTip="检测结果" Glyph="{dx:DXImage SvgImages/Spreadsheet}">
+                <view:UC_Operation x:Name="uc_opr"/>
+            </dx:DXTabItem>
+            <dx:DXTabItem x:Name="it_production" Header="产能统计" ToolTip="产能统计" Glyph="{dx:DXImage SvgImages/Spreadsheet/Accounting.svg}">
+                <view:UC_Production x:Name="uc_prd"/>
+            </dx:DXTabItem>
+
+            <dx:DXTabItem Visibility="Collapsed" x:Name="it_singal" Header="信号监控" ToolTip="信号监控" Glyph="{dx:DXImage Images/Chart/LegendLeftOverlay_32x32.png}">
+                <view:UC_Monitor x:Name="uc_mon"/>
+            </dx:DXTabItem>
+
+            <dx:DXTabItem x:Name="it_setting" Header="参数设置" ToolTip="参数设置" Glyph="{dx:DXImage SvgImages/Spreadsheet/CalculationOptions.svg}">
+                <view:UC_Setting x:Name="uc_settings"/>
+            </dx:DXTabItem>
+            <dx:DXTabItem x:Name="it_user" Header="用户管理" ToolTip="用户管理" Glyph="{dx:DXImage DevAV/Actions/NewItem_32x32.png}">
+
+            </dx:DXTabItem>
+        </dx:DXTabControl>
+        <Image Source="/Logo.png" HorizontalAlignment="Right" VerticalAlignment="Top" Width="360" Grid.Column="1" Margin="0,70,30,0"/>
+        <Grid   Grid.Row="1" VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <!--<TextBlock Grid.Column="0" Text="{Binding UserTxt,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Margin="10,0,0,0" Width="206">
+                USERNAME
+            </TextBlock>-->
+            <TextBlock Margin="10,5,0,0" Grid.Column="0" Foreground="Black" Text="text" HorizontalAlignment="Left"   Width="206">
+    USERNAME
+            </TextBlock>
+            <!--<TextBlock Grid.Column="3" Text="{Binding VersionTxt,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Margin="22,0,0,0" RenderTransformOrigin="0.5,0.5" Width="238">
+                
+                Version
+            </TextBlock>-->
+            <TextBlock Grid.Column="3"   HorizontalAlignment="Left" Margin="10,5,0,0" RenderTransformOrigin="0.5,0.5" Width="238">
+                  版本号 Version
+            </TextBlock>
+            <Grid Column = "1"  Grid.ColumnSpan="2">
+                <Bars:UC_StatesBar x:Name="RunStates" Margin="0,-10,0,0" />
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

@@ -288,9 +288,9 @@
                 <!-- ─ 第二行：图表 ───────────────────────────────── -->
                 <Grid Grid.Row="1" Margin="0,0,0,10">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="3*"/>
+                        <ColumnDefinition Width="2.5*"/>
                         <ColumnDefinition Width="8"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="1.5*"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- 时段产量图 -->
@@ -333,7 +333,7 @@
 
                                     <!-- 图表 -->
 
-                                    <Grid Grid.Row =" 1" >
+                                    <Grid Grid.Row="1" >
                                         <dxc:ChartControl x:Name="NgHourlyChart" >
                                             <dxc:ChartControl.Resources>
                                                 <x:Array x:Key="HardCodedData" Type="{x:Type dxc:SeriesPoint}">
@@ -357,31 +357,8 @@
                                                     </dxc:AxisX2D>
                                                 </dxc:XYDiagram2D.AxisX>
 
-                                                <dxc:BarStackedSeries2D DisplayName="OK 产量" 
-                                        Brush="ForestGreen" 
-                                        LabelsVisibility="True">
-                                                    <dxc:BarStackedSeries2D.Points>
-                                                        <dxc:SeriesPoint Argument="八点" Value="85" />
-                                                        <dxc:SeriesPoint Argument="九点" Value="92" />
-                                                        <dxc:SeriesPoint Argument="十点" Value="78" />
-                                                    </dxc:BarStackedSeries2D.Points>
-                                                    <dxc:BarStackedSeries2D.Label>
-                                                        <dxc:SeriesLabel TextPattern="{}{V}" Indent="5" />
-                                                    </dxc:BarStackedSeries2D.Label>
-                                                </dxc:BarStackedSeries2D>
-
-                                                <dxc:BarStackedSeries2D DisplayName="NG 产量" 
-                                        Brush="Crimson" 
-                                        LabelsVisibility="True">
-                                                    <dxc:BarStackedSeries2D.Points>
-                                                        <dxc:SeriesPoint Argument="八点" Value="15" />
-                                                        <dxc:SeriesPoint Argument="九点" Value="8" />
-                                                        <dxc:SeriesPoint Argument="十点" Value="22" />
-                                                    </dxc:BarStackedSeries2D.Points>
-                                                    <dxc:BarStackedSeries2D.Label>
-                                                        <dxc:SeriesLabel TextPattern="{}{V}" Indent="5" />
-                                                    </dxc:BarStackedSeries2D.Label>
-                                                </dxc:BarStackedSeries2D>
+                                                <!-- Series 由 code-behind 的 RedrawHourly() 动态写入 NgHourlyChart.Series，
+                                                     此处不放硬编码点，避免与动态数据混叠（Bug 2 修复） -->
 
                                             </dxc:XYDiagram2D>
 
@@ -464,13 +441,7 @@
                          LabelsVisibility="True"
                          ArgumentDataMember="Name"
                          ValueDataMember="Count">
-                                            <dxc:PieSeries2D.Points>
-                                                <dxc:SeriesPoint Argument="外观缺陷" Value="15" />
-                                                <dxc:SeriesPoint Argument="尺寸超差" Value="12" />
-                                                <dxc:SeriesPoint Argument="性能不合格" Value="8" />
-                                                <dxc:SeriesPoint Argument="物料损伤" Value="5" />
-                                                <dxc:SeriesPoint Argument="其他" Value="3" />
-                                            </dxc:PieSeries2D.Points>
+                                            <!-- Points 由 code-behind ApplyNgTypes() 动态写入，此处不放硬编码点（Bug 3 修复） -->
 
                                             <dxc:PieSeries2D.Label>
                                                 <dxc:SeriesLabel TextPattern="{}{VP:P0}" 

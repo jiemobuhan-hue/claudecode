@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build *)",
+      "Bash(dotnet run *)",
+      "Bash(dotnet restore *)",
+      "Bash(msbuild ZenergyBFSI.csproj /t:ResolveAssemblyReferences /v:q)"
+    ]
+  }
+}

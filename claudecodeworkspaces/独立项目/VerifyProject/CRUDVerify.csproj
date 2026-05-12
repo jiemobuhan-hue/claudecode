@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <NoWarn>CS8618;CS8625;CS8601;CS8602;CS8603;CS8604;CS8655;CS8621;CS8981</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.28" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.0" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.8.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../Models/*.cs" Link="Models/%(Filename)%(Extension)" />
+    <Compile Include="../CRUDServices/*.cs" Link="CRUDServices/%(Filename)%(Extension)" />
+    <Compile Include="../../Service/SqlServerDapperHelper.cs" Link="Service/SqlServerDapperHelper.cs" />
+  </ItemGroup>
+
+</Project>
