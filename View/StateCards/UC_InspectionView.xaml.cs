@@ -862,6 +862,10 @@ namespace ZenergyBFSI.View.StateCards
             SvZoom.ScrollChanged -= OnSvZoomScrollChanged;
             SvZoom.ScrollChanged += OnSvZoomScrollChanged;
 
+            // 防止拖拽出界后鼠标捕获丢失
+            CanvasMinimap.LostMouseCapture -= OnMinimapLostCapture;
+            CanvasMinimap.LostMouseCapture += OnMinimapLostCapture;
+
             // 历史复检
             PopulateHistoryPanel(img);
 
@@ -1027,6 +1031,11 @@ namespace ZenergyBFSI.View.StateCards
         private void OnSvZoomScrollChanged(object sender, ScrollChangedEventArgs e)
         {
             UpdateMinimapRect();
+        }
+
+        private void OnMinimapLostCapture(object sender, EventArgs e)
+        {
+            _minimapDragging = false;
         }
 
         private void PopulateHistoryPanel(ImageRecord img)
