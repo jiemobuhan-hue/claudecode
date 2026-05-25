@@ -38,7 +38,7 @@ namespace ZenergyBFSI.Service
         {
             if (!File.Exists(sourcePath)) return null;
 
-            var cacheKey = ComputeCacheKey(sourcePath);
+            var cacheKey = ComputeCacheKey(sourcePath, decodeWidth);
             var cacheFile = Path.Combine(CacheDir, cacheKey + ".jpg");
 
             if (File.Exists(cacheFile)) return cacheFile;
@@ -53,7 +53,7 @@ namespace ZenergyBFSI.Service
                 {
                     return BuildThumbnail(sourcePath, decodeWidth, cacheFile);
                 }
-                catch (FileNotFoundException)
+                catch (Exception ex) when (ex is FileNotFoundException || ex is NotSupportedException || ex is IOException || ex is InvalidOperationException)
                 {
                     return null;
                 }
@@ -75,9 +75,9 @@ namespace ZenergyBFSI.Service
         //  内部
         // ════════════════════════════════════════════════════════
 
-        private static string ComputeCacheKey(string sourcePath)
+        private static string ComputeCacheKey(string sourcePath, int decodeWidth)
         {
-            var raw = sourcePath + File.GetLastWriteTime(sourcePath).Ticks;
+            var raw = sourcePath + "|" + File.GetLastWriteTime(sourcePath).Ticks + "|" + decodeWidth;
             using (var sha = SHA256.Create())
             {
                 var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
@@ -114,8 +114,8 @@ namespace ZenergyBFSI.Service
             }
             catch (IOException)
             {
-                // 磁盘满等 IO 异常：跳过缓存写入，
-                // 下次调用时文件不存在会重新解码。
+                // 写入失败，删除不完整文件，下次重新解码
+                try { File.Delete(cacheFile); } catch { }
             }
 
             return cacheFile;
