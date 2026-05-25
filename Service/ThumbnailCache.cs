@@ -53,7 +53,7 @@ namespace ZenergyBFSI.Service
                 {
                     return BuildThumbnail(sourcePath, decodeWidth, cacheFile);
                 }
-                catch
+                catch (FileNotFoundException)
                 {
                     return null;
                 }
@@ -99,21 +99,23 @@ namespace ZenergyBFSI.Service
             bmp.Freeze();
 
             // 2. 编码为 JPEG 写入缓存
-            int w = bmp.PixelWidth;
-            int h = bmp.PixelHeight;
-            var stride = w * 4; // BGRA
-            var pixels = new byte[stride * h];
-            bmp.CopyPixels(pixels, stride, 0);
-
             JpegBitmapEncoder encoder = new JpegBitmapEncoder
             {
                 QualityLevel = 85
             };
             encoder.Frames.Add(BitmapFrame.Create(bmp));
 
-            using (var fs = new FileStream(cacheFile, FileMode.Create, FileAccess.Write))
+            try
             {
-                encoder.Save(fs);
+                using (var fs = new FileStream(cacheFile, FileMode.Create, FileAccess.Write))
+                {
+                    encoder.Save(fs);
+                }
+            }
+            catch (IOException)
+            {
+                // 磁盘满等 IO 异常：跳过缓存写入，
+                // 下次调用时文件不存在会重新解码。
             }
 
             return cacheFile;
