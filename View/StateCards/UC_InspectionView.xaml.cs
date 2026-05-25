@@ -1,11 +1,16 @@
-﻿using DevExpress.Xpf.Grid;
+﻿using DevExpress.Xpf.Charts;
+using DevExpress.Xpf.Grid;
+using DevExpress.XtraRichEdit.Model;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Management;
+using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -17,6 +22,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using ZenergyBFSI.Model;
+using ZenergyBFSI.Service;
 using static ZenergyBFSI.Model.InspectionUtils;
 
 namespace ZenergyBFSI.View.StateCards
@@ -117,6 +123,11 @@ namespace ZenergyBFSI.View.StateCards
         // 图片卡片引用（imageId → Border 卡片）
         private readonly Dictionary<string, Border> _cardMap = new Dictionary<string, Border>();
 
+        // 后台加载取消令牌（切换产品时取消旧加载任务）
+        private CancellationTokenSource _loadCts;
+        // 占位卡片引用列表（用于后台加载时替换图片）
+        private readonly List<Border> _placeholders = new List<Border>();
+
         // 图片缩放状态
         private bool _isZoomed = false;
 
@@ -130,6 +141,7 @@ namespace ZenergyBFSI.View.StateCards
             public string NgTypes { get; }
             public List<string> NgTagList { get; }
             public string RecordId { get; }
+            public string Recordpath { get; set; }
             // 保存原始对象方便 SelectionChanged 取用
             public InspectionRecord Raw { get; }
 
@@ -145,6 +157,7 @@ namespace ZenergyBFSI.View.StateCards
                 NgTagList = (r.NgTypes ?? "")
                     //.Split('|', StringSplitOptions.RemoveEmptyEntries).ToList();
                     .Split('|').ToList();
+                Recordpath = r.Recordpath;
             }
         }
 
@@ -158,119 +171,148 @@ namespace ZenergyBFSI.View.StateCards
             DpTo.SelectedDate = DateTime.Today;
             BtnPrev.IsEnabled = false;
             BtnNext.IsEnabled = false;
-            SearchRequested += UC_InspectionView_SearchRequested;
+            SearchRequested 
+            += async (sender, e) =>
+            {
+                await UC_InspectionView_SearchRequestedAsync(sender, e);
+            };
             LoadImagesRequested += UC_InspectionView_LoadImagesRequested;
 
         }
 
         private void UC_InspectionView_LoadImagesRequested(object sender, string e)
         {
-            SetProductImages("111",new  List < ImageRecord >()
-            {
-                new ImageRecord
-                {
-                    ImageId ="001",
-                    CellCode ="CellCode001",
-                    StationId = "StationId001",
-                    AngleName = "AngleName001",
-                    ImagePath="C:\\Users\\T040352\\Pictures\\Camera Roll\\捕获.PNG",
-                    VisionResult = "NG",
-                    VisionScore = 35,
-                    NgType = "NgType001",
-                },
-                new ImageRecord
-                {
-                    ImageId ="002",
-                    CellCode ="CellCode001",
-                    StationId = "StationId001",
-                    AngleName = "AngleName001",
-                    ImagePath="C:\\Users\\T040352\\Pictures\\Camera Roll\\捕获.PNG",
-                    VisionResult = "NG",
-                    VisionScore = 35,
-                    NgType = "NgType001",
-                },
-                new ImageRecord
-                {
-                    ImageId ="003",
-                    CellCode ="CellCode001",
-                    StationId = "StationId001",
-                    AngleName = "AngleName001",
-                    ImagePath="C:\\Users\\T040352\\Pictures\\Camera Roll\\捕获.PNG",
-                    VisionResult = "NG",
-                    VisionScore = 35,
-                    NgType = "NgType001",
-                },
-                new ImageRecord
-                {
-                    ImageId ="004",
-                    CellCode ="CellCode001",
-                    StationId = "StationId001",
-                    AngleName = "AngleName001",
-                    ImagePath="C:\\Users\\T040352\\Pictures\\Camera Roll\\捕获.PNG",
-                    VisionResult = "NG",
-                    VisionScore = 35,
-                    NgType = "NgType001",
-                },
 
-            });
+            List<string> NGFiles = new List<string>();
+            List<string> OKFiles = new List<string>();
+            var files = Directory.GetFiles(e, "*__NG.bmp", SearchOption.AllDirectories);
+            NGFiles.AddRange(files);
+            var files2 = Directory.GetFiles(e, "*__OK.bmp", SearchOption.AllDirectories);
+            OKFiles.AddRange(files2);
+
+            List<ImageRecord> temp = new List<ImageRecord>();
+            foreach(var path in OKFiles)
+            {
+                // 分割路径，过滤掉空项（网络路径开头的两个空串会被保留）
+                string[] parts = path.Split(System.IO.Path.DirectorySeparatorChar);
+                // 取最后3段：右侧面、XYZ法向图-未扣图、08-20-42__OK.bmp
+                string[] lastThree = parts.Skip(parts.Length - 4).ToArray();
+                temp.Add(new ImageRecord()
+                {
+                    ImageId = lastThree[3],
+                    CellCode = lastThree[0],
+                    StationId = lastThree[1],
+                    AngleName = lastThree[2],
+                    VisionResult= "OK",
+                    NgType = "OK",
+                    VisionScore = 100,
+                    ImagePath = path
+                });
+            }
+            foreach (var path in NGFiles)
+            {
+                // 分割路径，过滤掉空项（网络路径开头的两个空串会被保留）
+                string[] parts = path.Split(System.IO.Path.DirectorySeparatorChar);
+                // 取最后3段：右侧面、XYZ法向图-未扣图、08-20-42__OK.bmp
+                string[] lastThree = parts.Skip(parts.Length - 4).ToArray();
+                temp.Add(new ImageRecord()
+                {
+                    ImageId = lastThree[3],
+                    CellCode = lastThree[0],
+                    StationId = lastThree[1],
+                    AngleName = lastThree[2],
+                    VisionResult = "NG",
+                    NgType = lastThree[1]+ lastThree[2]+ "检测NG",
+                    VisionScore = 100,
+                    ImagePath = path
+                });
+            }
+            SetProductImages("111", temp);
         }
-
-        private void UC_InspectionView_SearchRequested(object sender, SearchArgs e)
+        /// <summary>
+        /// 在指定目录下递归搜索文件名包含 cellCode 的文件（忽略大小写）
+        /// </summary>
+        /// <param name="directoryPath">根目录（如 @"\\192.168.1.13\d\CameraRaw\"）</param>
+        /// <param name="cellCode">电芯码关键词</param>
+        /// <returns>匹配的文件完整路径列表</returns>
+        private List<string> SearchFilesByCellCode(string directoryPath, string cellCode)
         {
-            var x = e.CellCode;
-            SetSearchResults(new List<InspectionRecord>()
+            var result = new List<string>();
+            if (!Directory.Exists(directoryPath))
+                return result;
+             
+            // 构造通配符模式：*code*
+            string pattern = $"*{cellCode}*";
+
+            // 获取所有匹配的子文件夹（递归搜索所有层级） 
+            List<string> matchedDirs = Directory.GetDirectories(directoryPath, pattern, SearchOption.AllDirectories).ToList();
+
+
+
+            return matchedDirs;
+        }
+        private async Task UC_InspectionView_SearchRequestedAsync(object sender, SearchArgs e)
+        {
+
+            var datafrom = DpFrom.DisplayDate.ToString("yyyy-MM-dd");
+            var dataTo = DpTo.DisplayDate.ToString("yyyy-MM-dd"); 
+            string networkPath = @"\\192.168.1.33\d\CameraRaw\" +$"{dataTo}" ; // 1. 定义UNC路径
+            if (!Directory.Exists(networkPath))
             {
-                new InspectionRecord()
+ 
+                MessageBox.Show($"未找到网络路径: {networkPath}");
+                return;
+            }
+
+            var result = new List<string>();
+
+            // 异步搜索（若需要同步则直接调用同步方法）
+            var matchedFiles =await Task.Run(() => SearchFilesByCellCode(networkPath, e.CellCode));
+
+
+            var x = e.CellCode;
+             List<InspectionRecord> temppic = new();
+
+            List<string> NGFiles = new List<string>();
+            List<string> OKFiles = new List<string>();
+            foreach (var pathfiles in matchedFiles)
+            {
+                // 递归搜索该子文件夹下所有 *__OK.bmp 文件
+                var files = Directory.GetFiles(pathfiles, "*__NG.bmp", SearchOption.AllDirectories);
+                NGFiles.AddRange(files);
+                var files2 = Directory.GetFiles(pathfiles, "*__OK.bmp", SearchOption.AllDirectories);
+                OKFiles.AddRange(files2);
+                if (NGFiles.Count > 0)
                 {
-                    CellCode = "CellCode1",
-                    LineId = "LineId1",
-                    DateTime="DateTime",
-                    NgTypes="NgTypes",
-                    OverallResult="NG",
-                    StationId="StationId",
-                    ProcessMs = 1
-                },
-                new InspectionRecord()
+                    temppic.Add(new InspectionRecord()
+                    {
+                        CellCode = System.IO.Path.GetFileName(pathfiles),
+                        LineId = "LineId1",
+                        OverallResult = "NG",
+                        NgTypes = $"{NGFiles.Count}",
+                        DateTime = dataTo,
+                        StationId = "StationIdA",
+                        ProcessMs = 1,
+                        Recordpath = pathfiles
+                    });
+                }
+                else
                 {
-                    CellCode = "CellCode2",
-                    LineId = "LineId1",
-                    DateTime="DateTime",
-                    NgTypes="NgTypes",
-                    OverallResult="NG",
-                    StationId="StationId",
-                    ProcessMs = 1
-                },
-                new InspectionRecord()
-                {
-                    CellCode = "CellCode3",
-                    LineId = "LineId1",
-                    DateTime="DateTime",
-                    NgTypes="NgTypes",
-                    OverallResult="NG",
-                    StationId="StationId",
-                    ProcessMs = 1
-                },
-                new InspectionRecord()
-                {
-                    CellCode = "CellCode4",
-                    LineId = "LineId1",
-                    DateTime="DateTime",
-                    NgTypes="NgTypes",
-                    OverallResult="NG",
-                    StationId="StationId",
-                    ProcessMs = 1
-                },
-                new InspectionRecord()
-                {
-                    CellCode = "CellCode5",
-                    LineId = "LineId1",
-                    DateTime="DateTime",
-                    NgTypes="NgTypes",
-                    OverallResult="NG",
-                    StationId="StationId",
-                    ProcessMs = 1
-                },
-            }, 5, 0, 5);
+                    temppic.Add(new InspectionRecord()
+                    {
+                        CellCode = System.IO.Path.GetFileName(pathfiles),
+                        LineId = "LineId1",
+                        OverallResult = "OK",
+                        NgTypes = $"{OKFiles.Count}",
+                        DateTime = dataTo,
+                        StationId = "StationIdA",
+                        ProcessMs = 1,
+                        Recordpath = pathfiles
+                    });
+                }
+            }
+
+            SetSearchResults(temppic, 5, 0, 5);
         }
 
         // ════════════════════════════════════════════════════════
@@ -342,7 +384,7 @@ namespace ZenergyBFSI.View.StateCards
             SvImages.Visibility = Visibility.Visible;
 
             // 触发外部加载图片
-            LoadImagesRequested?.Invoke(this, vm.CellCode);
+            LoadImagesRequested?.Invoke(this, vm.Recordpath);
         }
 
         private void HideDetailPanel()
@@ -360,18 +402,186 @@ namespace ZenergyBFSI.View.StateCards
         // ════════════════════════════════════════════════════════
         private void BuildImageCards()
         {
+            // 取消上一次未完成的加载任务
+            _loadCts?.Cancel();
+            _loadCts?.Dispose();
+            _loadCts = new CancellationTokenSource();
+            var token = _loadCts.Token;
+
             WpImages.Children.Clear();
             _cardMap.Clear();
+            _placeholders.Clear();
             TxtImgCount.Text = $"{_images.Count} 张图片";
 
+            // ① 同步渲染占位卡片（无图片加载，<100ms）
             for (int i = 0; i < _images.Count; i++)
             {
                 var img = _images[i];
-                var idx = i;   // 闭包捕获
-                var card = BuildCard(img, () => OpenZoom(idx));
-                _cardMap[img.ImageId] = card;
-                WpImages.Children.Add(card);
+                var idx = i;
+                var placeholder = BuildPlaceholderCard(img, () => OpenZoom(idx));
+                _cardMap[img.ImageId] = placeholder;
+                _placeholders.Add(placeholder);
+                WpImages.Children.Add(placeholder);
             }
+
+            // ② 后台逐张加载真实缩略图
+            Task.Run(async () =>
+            {
+                for (int i = 0; i < _images.Count; i++)
+                {
+                    if (token.IsCancellationRequested) return;
+                    try
+                    {
+                        var img = _images[i];
+                        var cachedPath = ThumbnailCache.GetOrCreate(img.ImagePath, 400);
+                        if (cachedPath == null) continue;
+
+                        var bmp = new BitmapImage();
+                        bmp.BeginInit();
+                        bmp.UriSource = new Uri(cachedPath, UriKind.Absolute);
+                        bmp.CacheOption = BitmapCacheOption.OnLoad;
+                        bmp.EndInit();
+                        bmp.Freeze();
+
+                        var idx = i;
+                        Dispatcher.InvokeAsync(() =>
+                        {
+                            if (token.IsCancellationRequested) return;
+                            ReplacePlaceholderImage(idx, bmp);
+                        });
+                    }
+                    catch
+                    {
+                        // 单张加载失败不影响其余图片
+                    }
+                }
+            }, token);
+        }
+
+        /// <summary>
+        /// 构建不含图片的占位卡片，与 BuildCard 结构一致但图片区仅显示灰底+角度名。
+        /// </summary>
+        private Border BuildPlaceholderCard(ImageRecord img, Action onZoom)
+        {
+            bool isNg = img.VisionResult == "NG";
+            bool manOk = img.IsManualReviewed && img.ManualResult == "OK";
+            bool manNg = img.IsManualReviewed && img.ManualResult == "NG";
+
+            var borderColor = manOk ? Color.FromRgb(0x4C, 0xAF, 0x50)
+                            : manNg ? Color.FromRgb(0xF4, 0x43, 0x36)
+                            : isNg ? Color.FromArgb(0x66, 0xF4, 0x43, 0x36)
+                            : Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF);
+
+            var card = new Border
+            {
+                Width = 240,
+                Margin = new Thickness(6),
+                CornerRadius = new CornerRadius(10),
+                BorderThickness = new Thickness(1.5),
+                BorderBrush = new SolidColorBrush(borderColor),
+                Background = (Brush)FindResource("MaterialDesignCardBackground"),
+                Cursor = Cursors.Hand,
+                Tag = img.ImageId
+            };
+
+            card.MouseDown += (_, __) => onZoom();
+
+            var stack = new StackPanel();
+            card.Child = stack;
+
+            // ── 图片占位区（灰底 + 角度名文字）──
+            var imgGrid = new Grid { Height = 170, Background = Brushes.Black };
+            imgGrid.Tag = "placeholder";
+            imgGrid.Children.Add(new TextBlock
+            {
+                Text = img.AngleName,
+                Foreground = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+                FontSize = 14,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            stack.Children.Add(imgGrid);
+
+            // ── 信息区 ──
+            var info = new StackPanel { Margin = new Thickness(10, 8, 10, 10) };
+            stack.Children.Add(info);
+
+            info.Children.Add(new TextBlock
+            {
+                Text = img.AngleName,
+                FontSize = 12,
+                FontWeight = FontWeights.Medium
+            });
+
+            var visionRow = new StackPanel { Orientation = Orientation.Horizontal };
+            visionRow.Children.Add(new TextBlock
+            {
+                Text = "视觉:",
+                FontSize = 10,
+                Foreground = (Brush)FindResource("MaterialDesignBodyLight"),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            visionRow.Children.Add(MakeBadge(img.VisionResult ?? "--",
+                img.VisionResult == "OK" ? Color.FromRgb(0x4C, 0xAF, 0x50)
+                                         : Color.FromRgb(0xF4, 0x43, 0x36)));
+            visionRow.Children.Add(new TextBlock
+            {
+                Text = $"{img.VisionScore * 100:F1}%",
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 10,
+                Foreground = (Brush)FindResource("MaterialDesignBodyLight"),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            if (!string.IsNullOrEmpty(img.NgType))
+                visionRow.Children.Add(MakeTag(img.NgType));
+            info.Children.Add(visionRow);
+
+            // ── 放大按钮（悬停显示）──
+            var zoomBtn = new Button
+            {
+                Style = (Style)FindResource("MaterialDesignIconButton"),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 6, 6, 0),
+                Opacity = 0,
+                ToolTip = "放大查看"
+            };
+            zoomBtn.Content = new MaterialDesignThemes.Wpf.PackIcon
+            {
+                Kind = MaterialDesignThemes.Wpf.PackIconKind.ZoomIn,
+                Width = 18,
+                Height = 18
+            };
+            zoomBtn.Click += (_, __) => onZoom();
+            imgGrid.Children.Add(zoomBtn);
+            card.MouseEnter += (_, __) => zoomBtn.Opacity = 1;
+            card.MouseLeave += (_, __) => zoomBtn.Opacity = 0;
+
+            return card;
+        }
+
+        /// <summary>
+        /// 将占位卡片的灰色背景替换为已加载的缩略图。
+        /// </summary>
+        private void ReplacePlaceholderImage(int index, BitmapImage bmp)
+        {
+            if (index < 0 || index >= _placeholders.Count) return;
+
+            var card = _placeholders[index];
+            var stack = card.Child as StackPanel;
+            if (stack == null || stack.Children.Count == 0) return;
+
+            var imgGrid = stack.Children[0] as Grid;
+            if (imgGrid == null) return;
+
+            // 移除占位文字，替换为真实图片
+            imgGrid.Children.Clear();
+            var wpfImg = new System.Windows.Controls.Image
+            {
+                Stretch = Stretch.Uniform,
+                Source = bmp
+            };
+            imgGrid.Children.Add(wpfImg);
         }
 
         private Border BuildCard(ImageRecord img, Action onZoom)
@@ -428,7 +638,7 @@ namespace ZenergyBFSI.View.StateCards
                     CornerRadius = new CornerRadius(4),
                     Padding = new Thickness(7, 2, 7, 2),
                     HorizontalAlignment = HorizontalAlignment.Left,
-                    VerticalAlignment = VerticalAlignment.Top,
+                    VerticalAlignment = System.Windows.VerticalAlignment.Top,
                     Margin = new Thickness(8),
                 };
                 badge.Child = new TextBlock
@@ -447,7 +657,7 @@ namespace ZenergyBFSI.View.StateCards
             {
                 Style = (Style)FindResource("MaterialDesignIconButton"),
                 HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top,
+                VerticalAlignment = System.Windows.VerticalAlignment.Top,
                 Margin = new Thickness(0, 6, 6, 0),
                 Opacity = 0,
                 ToolTip = "放大查看"
@@ -479,7 +689,7 @@ namespace ZenergyBFSI.View.StateCards
                 Text = "视觉:",
                 FontSize = 10,
                 Foreground = (Brush)FindResource("MaterialDesignBodyLight"),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = System.Windows.VerticalAlignment.Center
             });
             visionRow.Children.Add(MakeBadge(img.VisionResult ?? "--",
                 img.VisionResult == "OK" ? Color.FromRgb(0x4C, 0xAF, 0x50)
@@ -490,7 +700,7 @@ namespace ZenergyBFSI.View.StateCards
                 FontFamily = new FontFamily("Consolas"),
                 FontSize = 10,
                 Foreground = (Brush)FindResource("MaterialDesignBodyLight"),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = System.Windows.VerticalAlignment.Center
             });
             if (!string.IsNullOrEmpty(img.NgType))
                 visionRow.Children.Add(MakeTag(img.NgType));
@@ -546,14 +756,14 @@ namespace ZenergyBFSI.View.StateCards
                 Width = 14,
                 Height = 14,
                 Foreground = Brushes.Gray,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = System.Windows.VerticalAlignment.Center
             });
             row.Children.Add(new TextBlock
             {
                 Text = $"{img.ManualUser} 已复检",
                 FontSize = 10,
                 Foreground = (Brush)FindResource("MaterialDesignBodyLight"),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = System.Windows.VerticalAlignment.Center
             });
             row.Children.Add(MakeBadge(img.ManualResult,
                 img.ManualResult == "OK" ? Color.FromRgb(0x4C, 0xAF, 0x50)
