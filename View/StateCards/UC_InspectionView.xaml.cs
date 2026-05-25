@@ -21,6 +21,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using ZenergyBFSI.Model;
 using ZenergyBFSI.Service;
 using static ZenergyBFSI.Model.InspectionUtils;
@@ -130,6 +131,9 @@ namespace ZenergyBFSI.View.StateCards
 
         // 图片缩放状态
         private bool _isZoomed = false;
+
+        // 小地图拖拽状态
+        private bool _minimapDragging = false;
 
         // ListView 绑定用包装类
         private class RecordVm
@@ -498,7 +502,7 @@ namespace ZenergyBFSI.View.StateCards
                 Foreground = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
                 FontSize = 14,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = System.Windows.VerticalAlignment.Center
             });
             stack.Children.Add(imgGrid);
 
@@ -519,7 +523,7 @@ namespace ZenergyBFSI.View.StateCards
                 Text = "视觉:",
                 FontSize = 10,
                 Foreground = (Brush)FindResource("MaterialDesignBodyLight"),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = System.Windows.VerticalAlignment.Center
             });
             visionRow.Children.Add(MakeBadge(img.VisionResult ?? "--",
                 img.VisionResult == "OK" ? Color.FromRgb(0x4C, 0xAF, 0x50)
@@ -530,7 +534,7 @@ namespace ZenergyBFSI.View.StateCards
                 FontFamily = new FontFamily("Consolas"),
                 FontSize = 10,
                 Foreground = (Brush)FindResource("MaterialDesignBodyLight"),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = System.Windows.VerticalAlignment.Center
             });
             if (!string.IsNullOrEmpty(img.NgType))
                 visionRow.Children.Add(MakeTag(img.NgType));
@@ -547,7 +551,7 @@ namespace ZenergyBFSI.View.StateCards
             {
                 Style = (Style)FindResource("MaterialDesignIconButton"),
                 HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top,
+                VerticalAlignment = System.Windows.VerticalAlignment.Top,
                 Margin = new Thickness(0, 6, 6, 0),
                 Opacity = 0,
                 ToolTip = "放大查看"
@@ -853,6 +857,11 @@ namespace ZenergyBFSI.View.StateCards
             // 缩略图导航
             BuildThumbs();
 
+            // 小地图
+            BuildMinimap();
+            SvZoom.ScrollChanged -= OnSvZoomScrollChanged;
+            SvZoom.ScrollChanged += OnSvZoomScrollChanged;
+
             // 历史复检
             PopulateHistoryPanel(img);
 
@@ -860,6 +869,10 @@ namespace ZenergyBFSI.View.StateCards
             TglOk.IsChecked = img.IsManualReviewed && img.ManualResult == "OK";
             TglNg.IsChecked = img.IsManualReviewed && img.ManualResult == "NG";
             UpdateSubmitBtn();
+
+            // 小地图视口矩形延迟更新（等待 Canvas 完成 Measure/Arrange）
+            Dispatcher.BeginInvoke(new Action(() => UpdateMinimapRect()),
+                System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         private void DrawBbox(string bbox)
@@ -925,6 +938,95 @@ namespace ZenergyBFSI.View.StateCards
                 }
                 SpThumbs.Children.Add(thumb);
             }
+        }
+
+        /// <summary>加载小地图缩略图（极低分辨率解码）。</summary>
+        private void BuildMinimap()
+        {
+            var img = _images[_zoomIdx];
+            if (!File.Exists(img.ImagePath)) return;
+            ImgMinimap.Source = LoadBitmapSafe(img.ImagePath, decodeWidth: 240);
+        }
+
+        /// <summary>根据主图 ScrollViewer 偏移量更新小地图视口矩形的位置和大小。</summary>
+        private void UpdateMinimapRect()
+        {
+            if (ImgMinimap.Source == null) return;
+            double mapW = CanvasMinimap.ActualWidth;
+            double mapH = CanvasMinimap.ActualHeight;
+            double imgW = ImgMinimap.Source.Width;
+            double imgH = ImgMinimap.Source.Height;
+            if (imgW <= 0 || imgH <= 0 || mapW <= 0 || mapH <= 0) return;
+
+            // Uniform stretch dimensions inside minimap canvas
+            double scale = Math.Min(mapW / imgW, mapH / imgH);
+            double dispW = imgW * scale;
+            double dispH = imgH * scale;
+            double offsetX = (mapW - dispW) / 2;
+            double offsetY = (mapH - dispH) / 2;
+
+            double ratioX = SvZoom.ExtentWidth > 0 ? SvZoom.ViewportWidth / SvZoom.ExtentWidth : 1;
+            double ratioY = SvZoom.ExtentHeight > 0 ? SvZoom.ViewportHeight / SvZoom.ExtentHeight : 1;
+
+            RectViewport.Width = dispW * ratioX;
+            RectViewport.Height = dispH * ratioY;
+
+            double maxOffX = SvZoom.ExtentWidth - SvZoom.ViewportWidth;
+            double maxOffY = SvZoom.ExtentHeight - SvZoom.ViewportHeight;
+            double scrollRatioX = maxOffX > 0 ? SvZoom.HorizontalOffset / maxOffX : 0;
+            double scrollRatioY = maxOffY > 0 ? SvZoom.VerticalOffset / maxOffY : 0;
+
+            Canvas.SetLeft(RectViewport, offsetX + scrollRatioX * (dispW - RectViewport.Width));
+            Canvas.SetTop(RectViewport, offsetY + scrollRatioY * (dispH - RectViewport.Height));
+        }
+
+        private void Minimap_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            _minimapDragging = true;
+            CanvasMinimap.CaptureMouse();
+            PanMinimapToPoint(e.GetPosition(CanvasMinimap));
+        }
+
+        private void Minimap_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_minimapDragging) return;
+            PanMinimapToPoint(e.GetPosition(CanvasMinimap));
+        }
+
+        private void Minimap_MouseUp(object sender, MouseButtonEventArgs e)
+        {
+            _minimapDragging = false;
+            CanvasMinimap.ReleaseMouseCapture();
+        }
+
+        /// <summary>将小地图上的点击/拖拽位置映射为 ScrollViewer 滚动偏移。</summary>
+        private void PanMinimapToPoint(Point pt)
+        {
+            if (ImgMinimap.Source == null) return;
+            double mapW = CanvasMinimap.ActualWidth;
+            double mapH = CanvasMinimap.ActualHeight;
+            double imgW = ImgMinimap.Source.Width;
+            double imgH = ImgMinimap.Source.Height;
+            if (imgW <= 0 || imgH <= 0 || mapW <= 0 || mapH <= 0) return;
+
+            double scale = Math.Min(mapW / imgW, mapH / imgH);
+            double dispW = imgW * scale;
+            double dispH = imgH * scale;
+            double offsetX = (mapW - dispW) / 2;
+            double offsetY = (mapH - dispH) / 2;
+
+            double normX = Math.Max(0, Math.Min(1, (pt.X - offsetX) / dispW));
+            double normY = Math.Max(0, Math.Min(1, (pt.Y - offsetY) / dispH));
+
+            double maxOffX = Math.Max(0, SvZoom.ExtentWidth - SvZoom.ViewportWidth);
+            double maxOffY = Math.Max(0, SvZoom.ExtentHeight - SvZoom.ViewportHeight);
+            SvZoom.ScrollToHorizontalOffset(normX * maxOffX);
+            SvZoom.ScrollToVerticalOffset(normY * maxOffY);
+        }
+
+        private void OnSvZoomScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            UpdateMinimapRect();
         }
 
         private void PopulateHistoryPanel(ImageRecord img)
