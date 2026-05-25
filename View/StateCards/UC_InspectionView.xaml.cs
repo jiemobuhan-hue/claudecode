@@ -536,6 +536,12 @@ namespace ZenergyBFSI.View.StateCards
                 visionRow.Children.Add(MakeTag(img.NgType));
             info.Children.Add(visionRow);
 
+            // ── 复检状态区（可重刷）──
+            var footerHolder = new ContentControl { Tag = img.ImageId };
+            info.Children.Add(footerHolder);
+            card.Tag = (img, footerHolder, onZoom);
+            RefreshCardFooter(card, img);
+
             // ── 放大按钮（悬停显示）──
             var zoomBtn = new Button
             {
