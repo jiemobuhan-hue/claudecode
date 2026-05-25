@@ -445,6 +445,25 @@
                                     </StackPanel>
                                 </Border>
 
+                                <!-- 小地图导航器 -->
+                                <Border CornerRadius="6" Height="180" Margin="16,8,16,0"
+                                        Background="#FF1E1E1E" BorderBrush="#33FFFFFF" BorderThickness="1">
+                                    <Canvas x:Name="CanvasMinimap" ClipToBounds="True"
+                                            MouseDown="Minimap_MouseDown"
+                                            MouseMove="Minimap_MouseMove"
+                                            MouseUp="Minimap_MouseUp"
+                                            Cursor="Hand">
+                                        <Image x:Name="ImgMinimap" Stretch="Uniform"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               Width="{Binding ActualWidth, ElementName=CanvasMinimap}"
+                                               Height="{Binding ActualHeight, ElementName=CanvasMinimap}"/>
+                                        <Rectangle x:Name="RectViewport"
+                                                   Fill="#332196F3" Stroke="#992196F3"
+                                                   StrokeThickness="1.5" RadiusX="2" RadiusY="2"
+                                                   IsHitTestVisible="False"/>
+                                    </Canvas>
+                                </Border>
+
                                 <!-- 视觉系统信息 -->
                                 <Expander Header="视觉系统判断" IsExpanded="True"
                                           Margin="0,4,0,0">
