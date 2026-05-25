@@ -580,14 +580,16 @@ namespace ZenergyBFSI.View.StateCards
             var imgGrid = stack.Children[0] as Grid;
             if (imgGrid == null) return;
 
-            // 移除占位文字，替换为真实图片
-            imgGrid.Children.Clear();
+            // 移除占位文字（保留 zoom 按钮等其他控件）
+            var toRemove = imgGrid.Children.OfType<TextBlock>().ToList();
+            foreach (var tb in toRemove) imgGrid.Children.Remove(tb);
+            // 插入真实图片到最底层（zoom 按钮保持在上层）
             var wpfImg = new System.Windows.Controls.Image
             {
                 Stretch = Stretch.Uniform,
                 Source = bmp
             };
-            imgGrid.Children.Add(wpfImg);
+            imgGrid.Children.Insert(0, wpfImg);
         }
 
         private Border BuildCard(ImageRecord img, Action onZoom)
