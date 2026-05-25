@@ -116,6 +116,7 @@ namespace ZenergyBFSI.Service
             {
                 // 写入失败，删除不完整文件，下次重新解码
                 try { File.Delete(cacheFile); } catch { }
+                return null;
             }
 
             return cacheFile;
