@@ -2,6 +2,7 @@ using System.Data.SqlClient;
 using System.Text;
 using VerifyProject.Models;
 using VerifyProject.Repositories;
+using VerifyProject;
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -348,7 +349,7 @@ CREATE PROCEDURE PROC_Claude_InsertBlueFilmDataMOM
     @CellCode       NVARCHAR(50),
     @DetectionArea  NVARCHAR(10),
     @DetectionResults NVARCHAR(10),
-    @NGtypeNum      INT,
+    @NGtypeNum      INT = 0,
     @NGtype1        NVARCHAR(10) = NULL,
     @NGtype2        NVARCHAR(10) = NULL,
     @NGtype3        NVARCHAR(10) = NULL,
@@ -448,33 +449,39 @@ END
     }
     catch (Exception ex) { Console.WriteLine($"  [FAIL] {ex.Message}"); }
 
-    // 4. 导入配方参数种子数据（来自 蓝膜参数2.xlsx）
+    // 4. 导入配方参数种子数据（通过 C# 代码写入，不依赖 SQL 文件）
     Console.WriteLine("  [4/4] 导入配方参数种子数据...");
     try
     {
-        var sqlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "seed_params.sql");
-        if (!File.Exists(sqlPath))
+        // 先清旧 Claude 数据
+        using var del = new SqlCommand(
+            "DELETE FROM T_BlueFilmRecipeParameters WHERE ParameterID LIKE N'Claude%'", conn);
+        del.ExecuteNonQuery();
+
+        int inserted = 0, skipped = 0;
+        foreach (var p in SeedData.BlueFilmParams)
         {
-            Console.WriteLine($"  [WARN] 未找到种子数据文件: {sqlPath}");
+            using var check = new SqlCommand(
+                "SELECT COUNT(*) FROM T_BlueFilmRecipeParameters WHERE ParameterID=@p0", conn);
+            check.Parameters.AddWithValue("@p0", p.ParameterID);
+            if ((int)check.ExecuteScalar() > 0) { skipped++; continue; }
+
+            using var ins = new SqlCommand(@"
+                INSERT INTO T_BlueFilmRecipeParameters
+                    (ParameterID, Description, Enable, ParameterName, ParameterType,
+                     UpperSpecificationsLimit, LowerSpecificationsLimit, Unit, status)
+                VALUES
+                    (@p0, @p1, 1, @p0, @p2, @p3, @p4, @p5, N'启用')", conn);
+            ins.Parameters.AddWithValue("@p0", p.ParameterID);
+            ins.Parameters.AddWithValue("@p1", (object)p.Description ?? DBNull.Value);
+            ins.Parameters.AddWithValue("@p2", p.ParameterType);
+            ins.Parameters.AddWithValue("@p3", p.UpperSpec);
+            ins.Parameters.AddWithValue("@p4", p.LowerSpec);
+            ins.Parameters.AddWithValue("@p5", (object)(string.IsNullOrEmpty(p.Unit) ? DBNull.Value : p.Unit));
+            ins.ExecuteNonQuery();
+            inserted++;
         }
-        else
-        {
-            var lines = File.ReadAllLines(sqlPath, Encoding.UTF8);
-            int inserted = 0, skipped = 0;
-            foreach (var line in lines)
-            {
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("--"))
-                    continue;
-                try
-                {
-                    using var cmd = new SqlCommand(line, conn);
-                    cmd.ExecuteNonQuery();
-                    inserted++;
-                }
-                catch { skipped++; }
-            }
-            Console.WriteLine($"  [OK] 种子数据: {inserted} 条写入, {skipped} 条跳过");
-        }
+        Console.WriteLine($"  [OK] 种子数据: {inserted} 条写入, {skipped} 条跳过");
     }
     catch (Exception ex) { Console.WriteLine($"  [FAIL] 种子数据: {ex.Message}"); }
 
