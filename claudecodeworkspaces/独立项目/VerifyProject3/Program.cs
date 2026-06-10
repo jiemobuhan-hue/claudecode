@@ -156,12 +156,12 @@ void Test_BlueFilmDataMOM()
             Pass("GetByCellCode", list.Count > 0, $"{list.Count}条");
         }
 
-        // [3.5] PROC_GetBlueFilmDataMOM — 之前 COUNT 走 T_BlueFilmSide(bug)，声称已修复
+        // [3.5] PROC_Claude_GetBlueFilmDataMOM
         {
             try
             {
                 using var conn = new SqlConnection(CONN); conn.Open();
-                using var cmd = new SqlCommand("PROC_GetBlueFilmDataMOM", conn)
+                using var cmd = new SqlCommand("PROC_Claude_GetBlueFilmDataMOM", conn)
                 { CommandType = System.Data.CommandType.StoredProcedure };
                 cmd.Parameters.AddWithValue("@pageIndex", 1);
                 cmd.Parameters.AddWithValue("@pageSize", int.MaxValue);
@@ -171,12 +171,12 @@ void Test_BlueFilmDataMOM()
                 var ds = new System.Data.DataSet();
                 using var da = new SqlDataAdapter(cmd);
                 da.Fill(ds);
-                Pass("PROC_GetBlueFilmDataMOM (sp)", ds.Tables.Count >= 2,
+                Pass("PROC_Claude_GetBlueFilmDataMOM (sp)", ds.Tables.Count >= 2,
                     $"返回{ds.Tables.Count}个表 (总计/分页)");
             }
             catch (Exception ex)
             {
-                Pass($"PROC_GetBlueFilmDataMOM (sp)", false, ex.Message);
+                Pass($"PROC_Claude_GetBlueFilmDataMOM (sp)", false, ex.Message);
             }
         }
 
@@ -334,16 +334,16 @@ void RunSetup()
     TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD ParameterResult NVARCHAR(20) NULL",
         existingCols, "ParameterResult");
 
-    // 2. 重建 Proc_InsertBlueFilmDataMOM
-    Console.WriteLine("  [2/3] 重建 Proc_InsertBlueFilmDataMOM...");
+    // 2. 重建 PROC_Claude_InsertBlueFilmDataMOM
+    Console.WriteLine("  [2/4] 重建 PROC_Claude_InsertBlueFilmDataMOM...");
     try
     {
-        using var drop = new SqlCommand(
-            "DROP PROCEDURE IF EXISTS Proc_InsertBlueFilmDataMOM", conn);
-        drop.ExecuteNonQuery();
+        using var check = new SqlCommand(
+            "IF OBJECT_ID('PROC_Claude_InsertBlueFilmDataMOM','P') IS NOT NULL DROP PROCEDURE PROC_Claude_InsertBlueFilmDataMOM", conn);
+        check.ExecuteNonQuery();
 
         using var create = new SqlCommand(@"
-CREATE PROCEDURE Proc_InsertBlueFilmDataMOM
+CREATE PROCEDURE PROC_Claude_InsertBlueFilmDataMOM
     @SideCellType   NVARCHAR(10),
     @CellCode       NVARCHAR(50),
     @DetectionArea  NVARCHAR(10),
@@ -377,20 +377,20 @@ BEGIN
 END
 ", conn);
         create.ExecuteNonQuery();
-        Console.WriteLine("  [OK] Proc_InsertBlueFilmDataMOM 已重建");
+        Console.WriteLine("  [OK] PROC_Claude_InsertBlueFilmDataMOM 已重建");
     }
     catch (Exception ex) { Console.WriteLine($"  [FAIL] {ex.Message}"); }
 
-    // 3. 重建 PROC_GetBlueFilmDataMOM
-    Console.WriteLine("  [3/3] 重建 PROC_GetBlueFilmDataMOM...");
+    // 3. 重建 PROC_Claude_GetBlueFilmDataMOM
+    Console.WriteLine("  [3/4] 重建 PROC_Claude_GetBlueFilmDataMOM...");
     try
     {
-        using var drop = new SqlCommand(
-            "DROP PROCEDURE IF EXISTS PROC_GetBlueFilmDataMOM", conn);
-        drop.ExecuteNonQuery();
+        using var check = new SqlCommand(
+            "IF OBJECT_ID('PROC_Claude_GetBlueFilmDataMOM','P') IS NOT NULL DROP PROCEDURE PROC_Claude_GetBlueFilmDataMOM", conn);
+        check.ExecuteNonQuery();
 
         using var create = new SqlCommand(@"
-CREATE PROCEDURE PROC_GetBlueFilmDataMOM
+CREATE PROCEDURE PROC_Claude_GetBlueFilmDataMOM
     @pageIndex INT,
     @pageSize  INT,
     @startTime DATETIME,
@@ -402,22 +402,24 @@ BEGIN
     DECLARE @startRow INT = (@pageIndex - 1) * @pageSize + 1;
     DECLARE @endRow   INT = @pageIndex * @pageSize;
 
-    ;WITH DataSource AS (
-        SELECT
-            ROW_NUMBER() OVER (ORDER BY CreateTime DESC) AS RowNum,
-            SideCellType, CellCode, DetectionArea, DetectionResults,
-            NGtypeNum, NGtype1, NGtype2, NGtype3, CreateTime,
-            ParamterCode, ParameterDesc, Value,
-            UpperLimit, LowerLomit, TargetValue, Unit, ParameterResult
-        FROM T_BlueFilmDataMOM
-        WHERE (@CellCode = 'ALL' OR CellCode = @CellCode)
-          AND CreateTime >= @startTime
-          AND CreateTime <= @endTime
-    )
     SELECT
-        (SELECT COUNT(*) FROM T_BlueFilmDataMOM
-         WHERE (@CellCode = 'ALL' OR CellCode = @CellCode)
-           AND CreateTime >= @startTime AND CreateTime <= @endTime) AS TotalCount,
+        ROW_NUMBER() OVER (ORDER BY CreateTime DESC) AS RowNum,
+        SideCellType, CellCode, DetectionArea, DetectionResults,
+        NGtypeNum, NGtype1, NGtype2, NGtype3, CreateTime,
+        ParamterCode, ParameterDesc, Value,
+        UpperLimit, LowerLomit, TargetValue, Unit, ParameterResult
+    INTO #DataSource
+    FROM T_BlueFilmDataMOM
+    WHERE (@CellCode = 'ALL' OR CellCode = @CellCode)
+      AND CreateTime >= @startTime
+      AND CreateTime <= @endTime;
+
+    SELECT COUNT(*) AS TotalCount
+    FROM T_BlueFilmDataMOM
+    WHERE (@CellCode = 'ALL' OR CellCode = @CellCode)
+      AND CreateTime >= @startTime AND CreateTime <= @endTime;
+
+    SELECT
         RowNum AS 序号,
         SideCellType AS 电芯类型,
         CellCode AS 电芯条码,
@@ -434,15 +436,47 @@ BEGIN
         TargetValue AS 目标值,
         Unit AS 单位,
         ParameterResult AS 参数判定结果
-    FROM DataSource
+    FROM #DataSource
     WHERE RowNum BETWEEN @startRow AND @endRow
     ORDER BY RowNum;
+
+    DROP TABLE #DataSource;
 END
 ", conn);
         create.ExecuteNonQuery();
-        Console.WriteLine("  [OK] PROC_GetBlueFilmDataMOM 已重建");
+        Console.WriteLine("  [OK] PROC_Claude_GetBlueFilmDataMOM 已重建");
     }
     catch (Exception ex) { Console.WriteLine($"  [FAIL] {ex.Message}"); }
+
+    // 4. 导入配方参数种子数据（来自 蓝膜参数2.xlsx）
+    Console.WriteLine("  [4/4] 导入配方参数种子数据...");
+    try
+    {
+        var sqlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "seed_params.sql");
+        if (!File.Exists(sqlPath))
+        {
+            Console.WriteLine($"  [WARN] 未找到种子数据文件: {sqlPath}");
+        }
+        else
+        {
+            var lines = File.ReadAllLines(sqlPath, Encoding.UTF8);
+            int inserted = 0, skipped = 0;
+            foreach (var line in lines)
+            {
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("--"))
+                    continue;
+                try
+                {
+                    using var cmd = new SqlCommand(line, conn);
+                    cmd.ExecuteNonQuery();
+                    inserted++;
+                }
+                catch { skipped++; }
+            }
+            Console.WriteLine($"  [OK] 种子数据: {inserted} 条写入, {skipped} 条跳过");
+        }
+    }
+    catch (Exception ex) { Console.WriteLine($"  [FAIL] 种子数据: {ex.Message}"); }
 
     Console.WriteLine("  部署完成。\n");
 }

@@ -10,14 +10,14 @@ namespace ZenergyBFSI.Service.CRUDServices
     #region T_BlueFilmDataMOM CRUD — 存储过程 + 直接 SQL 回退
 
     // 存储过程 (2个):
-    //   Proc_InsertBlueFilmDataMOM
+    //   PROC_Claude_InsertBlueFilmDataMOM
     //     @SideCellType nvarchar(10), @CellCode nvarchar(50),
     //     @DetectionArea nvarchar(10), @DetectionResults nvarchar(10),
     //     @NGtypeNum int, @NGtype1 nvarchar(10), @NGtype2 nvarchar(10),
     //     @NGtype3 nvarchar(10), @CreateTime datetime
     //     注意: 无 @Reinvestment 参数!
     //
-    //   PROC_GetBlueFilmDataMOM (分页, 返回中文列名, 不含 Num)
+    //   PROC_Claude_GetBlueFilmDataMOM (分页, 返回中文列名, 不含 Num)
     //     @pageIndex int, @pageSize int, @startTime datetime,
     //     @endTime datetime, @CellCode nvarchar(50)
     //     返回列: 电芯类型, 电芯条码, 检测区域, 检测结果,
@@ -41,7 +41,7 @@ namespace ZenergyBFSI.Service.CRUDServices
         {
             using var conn = new SqlConnection(_connectionString);
             conn.Open();
-            using (var cmd = new SqlCommand("Proc_InsertBlueFilmDataMOM", conn))
+            using (var cmd = new SqlCommand("PROC_Claude_InsertBlueFilmDataMOM", conn))
             {
                 cmd.CommandType = CommandType.StoredProcedure;
                 cmd.Parameters.AddWithValue("@SideCellType", (object)model.SideCellType ?? DBNull.Value);
@@ -106,7 +106,7 @@ namespace ZenergyBFSI.Service.CRUDServices
         {
             using var conn = new SqlConnection(_connectionString);
             conn.Open();
-            using var cmd = new SqlCommand("PROC_GetBlueFilmDataMOM", conn)
+            using var cmd = new SqlCommand("PROC_Claude_GetBlueFilmDataMOM", conn)
             { CommandType = CommandType.StoredProcedure };
             cmd.Parameters.AddWithValue("@pageIndex", 1);
             cmd.Parameters.AddWithValue("@pageSize", int.MaxValue);
@@ -200,7 +200,7 @@ namespace ZenergyBFSI.Service.CRUDServices
 
         #region Mapping
 
-        // PROC_GetBlueFilmDataMOM 返回中文列名
+        // PROC_Claude_GetBlueFilmDataMOM 返回中文列名
         private List<T_BlueFilmDataMOM> MapFromChineseColumns(DataTable dt)
         {
             var list = new List<T_BlueFilmDataMOM>();

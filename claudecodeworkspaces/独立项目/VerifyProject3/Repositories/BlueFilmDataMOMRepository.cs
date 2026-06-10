@@ -7,14 +7,14 @@ namespace VerifyProject.Repositories
     #region T_BlueFilmDataMOM CRUD
 
     // 存储过程 (2个):
-    //   Proc_InsertBlueFilmDataMOM
+    //   PROC_Claude_InsertBlueFilmDataMOM
     //     @SideCellType nvarchar(10), @CellCode nvarchar(50),
     //     @DetectionArea nvarchar(10), @DetectionResults nvarchar(10),
     //     @NGtypeNum int, @NGtype1 nvarchar(10), @NGtype2 nvarchar(10),
     //     @NGtype3 nvarchar(10), @CreateTime datetime
     //     (注意: 无 @Reinvestment 参数!)
     //
-    //   PROC_GetBlueFilmDataMOM (分页, 返回中文列名)
+    //   PROC_Claude_GetBlueFilmDataMOM (分页, 返回中文列名)
     //     注意: 有 bug — COUNT 走 T_BlueFilmSide (不存在的表)
     //     因此放弃使用此存储过程, 查询全部走直接 SQL
     //
@@ -32,7 +32,7 @@ namespace VerifyProject.Repositories
             // 注意: 无 @Reinvestment 参数
             using var conn = new SqlConnection(_conn);
             conn.Open();
-            using (var cmd = new SqlCommand("Proc_InsertBlueFilmDataMOM", conn))
+            using (var cmd = new SqlCommand("PROC_Claude_InsertBlueFilmDataMOM", conn))
             {
                 cmd.CommandType = CommandType.StoredProcedure;
                 cmd.Parameters.AddWithValue("@SideCellType", (object)m.SideCellType ?? DBNull.Value);

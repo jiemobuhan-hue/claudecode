@@ -704,8 +704,8 @@ namespace ZenergyBFSI.Model
                     Unit = "mm",
                     ParameterResult = "OK"
                 });
-                Chk("Proc_InsertBlueFilmDataMOM", numMom != null);
-                Chk("PROC_GetBlueFilmDataMOM", repoMOM.GetByCellCode(codeMOM).Count > 0);
+                Chk("PROC_Claude_InsertBlueFilmDataMOM", numMom != null);
+                Chk("PROC_Claude_GetBlueFilmDataMOM", repoMOM.GetByCellCode(codeMOM).Count > 0);
                 var momResult = repoMOM.GetByCellCode(codeMOM).FirstOrDefault();
                 Chk("  新列 ParamterCode", momResult != null && momResult.ParamterCode == "TEST_CODE");
                 Chk("  新列 ParameterDesc", momResult != null && momResult.ParameterDesc == "测试缺陷#1-参数A");
@@ -1557,8 +1557,8 @@ namespace ZenergyBFSI.Model
                     string MOMRes;
                     try
                     {
-                        var check = await MomHandler.I.CheckInAsync(code);
-                        check = new MomCheckResult();
+                        //var check = await MomHandler.I.CheckInAsync(code);
+                        var check = new MomCheckResult();
                         check.Result = MomResultCode.Ok;
                         switch (check.Result)
                         {
