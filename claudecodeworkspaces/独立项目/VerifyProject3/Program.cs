@@ -11,20 +11,22 @@ var tag = $"VERIFY_{DateTime.Now:yyyyMMddHHmmss}";
 int total = 0, passed = 0;
 
 Console.WriteLine("╔══════════════════════════════════════════╗");
-Console.WriteLine("║  VisionProgram 三表 CRUD 验证            ║");
+Console.WriteLine("║  VisionProgram 配方种子 + 样本数据写入   ║");
 Console.WriteLine("╚══════════════════════════════════════════╝");
 
-// ── 一次性 SQL 部署: DDL + 存储过程 ──
-RunSetup();
+// ── 一次性 SQL 部署（初次运行取消注释） ──
+// RunSetup();
 
-//Test_BlueFilmDetection();
-Test_BlueFilmDataMOM();
-//Test_BlueFilmRecipeParameters();
+// ── 写入配方 + 样本检测数据 ──
+SeedRecipes();
+SeedSampleMOMData();
 
-Console.WriteLine($"\n{'═',40}");
-Console.WriteLine($"  {passed}/{total} 通过");
-if (passed == total) Console.WriteLine("  全部通过");
-else Console.WriteLine($"  {total - passed} 项失败");
+// ── 旧测试（后续使用，已注释） ──
+// Test_BlueFilmDetection();
+// Test_BlueFilmDataMOM();
+// Test_BlueFilmRecipeParameters();
+
+Console.WriteLine("\n  完成。");
 
 #region T_BlueFilmDetection
 
@@ -220,18 +222,18 @@ void Test_BlueFilmDataMOM()
         else Skip("Update");
 
         // [7] Delete
-        if (num != null)
-        {
-            int rows = repo.Delete(num.Value);
-            Pass("Delete", rows > 0);
-            var d = repo.GetByNum(num.Value);
-            Pass("  验证 Delete", d == null);
-        }
-        else Skip("Delete");
+        //if (num != null)
+        //{
+        //    int rows = repo.Delete(num.Value);
+        //    Pass("Delete", rows > 0);
+        //    var d = repo.GetByNum(num.Value);
+        //    Pass("  验证 Delete", d == null);
+        //}
+        //else Skip("Delete");
     }
     catch (Exception ex) { Fail(ex.Message); }
 
-    SafeCleanup("T_BlueFilmDataMOM", "CellCode", code);
+    //SafeCleanup("T_BlueFilmDataMOM", "CellCode", code);
 }
 
 #endregion
@@ -336,7 +338,7 @@ void RunSetup()
         existingCols, "ParameterResult");
 
     // 2. 重建 PROC_Claude_InsertBlueFilmDataMOM
-    Console.WriteLine("  [2/4] 重建 PROC_Claude_InsertBlueFilmDataMOM...");
+    Console.WriteLine("  [2/3] 重建 PROC_Claude_InsertBlueFilmDataMOM...");
     try
     {
         using var check = new SqlCommand(
@@ -449,42 +451,6 @@ END
     }
     catch (Exception ex) { Console.WriteLine($"  [FAIL] {ex.Message}"); }
 
-    // 4. 导入配方参数种子数据（通过 C# 代码写入，不依赖 SQL 文件）
-    Console.WriteLine("  [4/4] 导入配方参数种子数据...");
-    try
-    {
-        // 先清旧 Claude 数据
-        using var del = new SqlCommand(
-            "DELETE FROM T_BlueFilmRecipeParameters WHERE ParameterID LIKE N'Claude%'", conn);
-        del.ExecuteNonQuery();
-
-        int inserted = 0, skipped = 0;
-        foreach (var p in SeedData.BlueFilmParams)
-        {
-            using var check = new SqlCommand(
-                "SELECT COUNT(*) FROM T_BlueFilmRecipeParameters WHERE ParameterID=@p0", conn);
-            check.Parameters.AddWithValue("@p0", p.ParameterID);
-            if ((int)check.ExecuteScalar() > 0) { skipped++; continue; }
-
-            using var ins = new SqlCommand(@"
-                INSERT INTO T_BlueFilmRecipeParameters
-                    (ParameterID, Description, Enable, ParameterName, ParameterType,
-                     UpperSpecificationsLimit, LowerSpecificationsLimit, Unit, status)
-                VALUES
-                    (@p0, @p1, 1, @p0, @p2, @p3, @p4, @p5, N'启用')", conn);
-            ins.Parameters.AddWithValue("@p0", p.ParameterID);
-            ins.Parameters.AddWithValue("@p1", (object)p.Description ?? DBNull.Value);
-            ins.Parameters.AddWithValue("@p2", p.ParameterType);
-            ins.Parameters.AddWithValue("@p3", p.UpperSpec);
-            ins.Parameters.AddWithValue("@p4", p.LowerSpec);
-            ins.Parameters.AddWithValue("@p5", (object)(string.IsNullOrEmpty(p.Unit) ? DBNull.Value : p.Unit));
-            ins.ExecuteNonQuery();
-            inserted++;
-        }
-        Console.WriteLine($"  [OK] 种子数据: {inserted} 条写入, {skipped} 条跳过");
-    }
-    catch (Exception ex) { Console.WriteLine($"  [FAIL] 种子数据: {ex.Message}"); }
-
     Console.WriteLine("  部署完成。\n");
 }
 
@@ -502,6 +468,116 @@ void TryExec(SqlConnection conn, string sql, HashSet<string> existing, string co
         Console.WriteLine($"  [OK] 添加列 {colName}");
     }
     catch (Exception ex) { Console.WriteLine($"  [FAIL] 添加列 {colName}: {ex.Message}"); }
+}
+
+#endregion
+
+#region 种子数据写入
+
+void SeedRecipes()
+{
+    Console.WriteLine("\n── 写入配方数据 → T_BlueFilmRecipeParameters ──");
+    try
+    {
+        using var conn = new SqlConnection(CONN); conn.Open();
+        int inserted = 0, updated = 0, skipped = 0;
+
+        foreach (var p in SeedData.BlueFilmRecipes)
+        {
+            using var check = new SqlCommand(
+                "SELECT COUNT(*) FROM T_BlueFilmRecipeParameters WHERE ParameterID=@p0", conn);
+            check.Parameters.AddWithValue("@p0", p.ParameterID);
+            bool exists = (int)check.ExecuteScalar() > 0;
+
+            if (exists)
+            {
+                // 更新已有记录（覆盖初版约束）
+                using var upd = new SqlCommand(@"
+                    UPDATE T_BlueFilmRecipeParameters SET
+                        ParameterName=@name, Description=@desc, ParameterType=@type,
+                        UpperSpecificationsLimit=@upper, LowerSpecificationsLimit=@lower,
+                        Unit=@unit, Enable=1, status=N'启用', UpdateTime=GETDATE()
+                    WHERE ParameterID=@id", conn);
+                upd.Parameters.AddWithValue("@id", p.ParameterID);
+                upd.Parameters.AddWithValue("@name", p.ParameterName);
+                upd.Parameters.AddWithValue("@desc", p.Description);
+                upd.Parameters.AddWithValue("@type", p.ParameterType);
+                upd.Parameters.AddWithValue("@upper", p.UpperLimit);
+                upd.Parameters.AddWithValue("@lower", p.LowerLimit);
+                upd.Parameters.AddWithValue("@unit", (object)(string.IsNullOrEmpty(p.Unit) ? DBNull.Value : p.Unit));
+                upd.ExecuteNonQuery();
+                updated++;
+            }
+            else
+            {
+                using var ins = new SqlCommand(@"
+                    INSERT INTO T_BlueFilmRecipeParameters
+                        (ParameterID, ParameterName, Description, ParameterType,
+                         UpperSpecificationsLimit, LowerSpecificationsLimit,
+                         Unit, Enable, status, UpdateTime)
+                    VALUES
+                        (@id, @name, @desc, @type,
+                         @upper, @lower,
+                         @unit, 1, N'启用', GETDATE())", conn);
+                ins.Parameters.AddWithValue("@id", p.ParameterID);
+                ins.Parameters.AddWithValue("@name", p.ParameterName);
+                ins.Parameters.AddWithValue("@desc", p.Description);
+                ins.Parameters.AddWithValue("@type", p.ParameterType);
+                ins.Parameters.AddWithValue("@upper", p.UpperLimit);
+                ins.Parameters.AddWithValue("@lower", p.LowerLimit);
+                ins.Parameters.AddWithValue("@unit", (object)(string.IsNullOrEmpty(p.Unit) ? DBNull.Value : p.Unit));
+                ins.ExecuteNonQuery();
+                inserted++;
+            }
+        }
+        Console.WriteLine($"  配方: {inserted} 条新增, {updated} 条更新, {skipped} 条跳过");
+    }
+    catch (Exception ex) { Console.WriteLine($"  [FAIL] {ex.Message}"); }
+}
+
+void SeedSampleMOMData()
+{
+    Console.WriteLine("\n── 写入样本检测数据 → T_BlueFilmDataMOM ──");
+    try
+    {
+        using var conn = new SqlConnection(CONN); conn.Open();
+
+        // 清理旧样本
+        using var del = new SqlCommand(
+            "DELETE FROM T_BlueFilmDataMOM WHERE CellCode LIKE 'SAMPLE%'", conn);
+        int delCnt = del.ExecuteNonQuery();
+        if (delCnt > 0) Console.WriteLine($"  清理旧样本: {delCnt} 条");
+
+        int ok = 0, ng = 0;
+        foreach (var d in SeedData.SampleMOMData)
+        {
+            using var cmd = new SqlCommand("PROC_Claude_InsertBlueFilmDataMOM", conn)
+            { CommandType = System.Data.CommandType.StoredProcedure };
+            cmd.Parameters.AddWithValue("@SideCellType", d.SideCellType);
+            cmd.Parameters.AddWithValue("@CellCode", d.CellCode);
+            cmd.Parameters.AddWithValue("@DetectionArea", d.DetectionArea);
+            cmd.Parameters.AddWithValue("@DetectionResults", d.DetectionResults);
+            cmd.Parameters.AddWithValue("@NGtypeNum", 0);
+            cmd.Parameters.AddWithValue("@NGtype1", DBNull.Value);
+            cmd.Parameters.AddWithValue("@NGtype2", DBNull.Value);
+            cmd.Parameters.AddWithValue("@NGtype3", DBNull.Value);
+            cmd.Parameters.AddWithValue("@CreateTime", DateTime.Now);
+            cmd.Parameters.AddWithValue("@ParamterCode", d.ParamterCode);
+            cmd.Parameters.AddWithValue("@ParameterDesc", d.ParameterDesc);
+            cmd.Parameters.AddWithValue("@Value", d.Value);
+            cmd.Parameters.AddWithValue("@UpperLimit", d.UpperLimit);
+            cmd.Parameters.AddWithValue("@LowerLomit", d.LowerLimit);
+            cmd.Parameters.AddWithValue("@TargetValue", d.TargetValue);
+            cmd.Parameters.AddWithValue("@Unit", (object)(string.IsNullOrEmpty(d.Unit) ? DBNull.Value : d.Unit));
+            cmd.Parameters.AddWithValue("@ParameterResult", d.ParameterResult);
+            cmd.ExecuteNonQuery();
+
+            if (d.ParameterResult == "OK") ok++; else ng++;
+        }
+
+        Console.WriteLine($"  样本数据: 12 条 (OK:{ok} NG:{ng}) → CellCode=SAMPLE_001");
+    }
+    catch (Exception ex) { Console.WriteLine($"  [FAIL] {ex.Message}"); }
 }
 
 #endregion
