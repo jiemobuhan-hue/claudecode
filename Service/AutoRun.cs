@@ -1,16 +1,29 @@
 ﻿using DevExpress.ClipboardSource.SpreadsheetML;
-using DevExpress.Mvvm.Native; 
+using DevExpress.Data.Extensions;
+using DevExpress.Internal.WinApi.Windows.UI.Notifications;
+using DevExpress.Mvvm.Native;
+using DevExpress.XtraRichEdit.Import.Html;
+using PLCHandler;
+using PLCHandler.Control.View;
+using PLCHandler.Models;
 using RinKit;
 using System;
+using System.Collections;
 using System.Collections.Generic; 
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Markup;
 using System.Windows.Media;
+using System.Windows.Threading;
+using ViewModels;
 using ZenergyBFSI.Service;
+using ZenergyBFSI.Service.CRUDServices;
 using ZenergyBFSI.View;
+using ZenergyBFSI.Model.Vision;
+using static ZenergyBFSI.Model.AutoRun;
 
 namespace ZenergyBFSI.Model
 {
@@ -52,6 +65,9 @@ namespace ZenergyBFSI.Model
         private DateTime _heartbeatLostTime;         // 心跳丢失时刻
         private int _heartbeatRecoveringConfirmMs = 2000; // 心跳恢复确认时间（毫秒）
         private volatile bool _globalPaused = false; // 全局暂停标志（所有工站共享）
+
+
+        private PlcMonitor _monitor;
 
 
         #region DeepSeek 并行化框架
@@ -256,11 +272,10 @@ namespace ZenergyBFSI.Model
         #endregion
 
         #region 配置初始化需要的字段
-        private const string CONNECTION_STRINGA = "Data Source=(localdb)\\MSSQLLocalDB;Initial Catalog=VisionProgram;User ID=sa;Password=123456789;TrustServerCertificate=True";
+        private const string CONNECTION_STRINGA = "Data Source=DESKTOP-0F9L4KO\\RJ;Initial Catalog=VisionProgram;User ID=merj;Password=1234@abcD;TrustServerCertificate=True";
 
         private HarnessMeasureRepository _localHarnessMeasureRepositoryA;
-        private BlueFilmDetectionRepository _localBlueFilmDetectionRepositoryA;
-        
+        private BlueFilmDetectionRepository _localBlueFilmDetectionRepositoryA; 
 
         #endregion
 
@@ -294,10 +309,11 @@ namespace ZenergyBFSI.Model
                 //在这里初始化所有的视觉工控机的SQLserver连接
                 _localHarnessMeasureRepositoryA = new HarnessMeasureRepository(CONNECTION_STRINGA);
                 _localBlueFilmDetectionRepositoryA = new BlueFilmDetectionRepository(CONNECTION_STRINGA);
+                var x = DashboardService.I;
                 //初始化工站数据
                 //TODO
-
-
+                var PLCs = UC_PLCMonitor.PLC.DataContext as PLCBoardViewModel;
+                _monitor = PLCs._monitor;
                 Rdb.SelectList(out List<CellData> listData, "SELECT * from CellData ");
                 ListData = listData;
                 //foreach (var cell in listData)
@@ -464,30 +480,41 @@ namespace ZenergyBFSI.Model
                 Inspection = InspectionData;
             }
         }
+        /// <summary>
+        /// 设备链接状态检测 — 使用 PLCHandler 辅助工程
+        /// 检查主 PLC (omron_1) 的连接状态，断联时只报警不影响其它流程
+        /// </summary>
+        int heartloop = 0;
         private bool DeviceLink()
         {
-            //这里持续检测设备运行的心跳等状态，本设备只针对MOM监控
-
-            //如果PLC断联只报警不影响其它流程
-            if (PlcHandler.I._omronFins!=null&&PlcHandler.I._omronFins.Connect())
+            if (_monitor != null && _monitor.IsConnected("omron_1") && _monitor.IsConnected("omron_2"))
             {
+                if(heartloop == 0)
+                {
+                    SetInt_Plc($"PLC心跳响应", 0);
+                    SetInt_Plc($"出站心跳", 0);
+                    Thread.Sleep(1000);
+                    heartloop = 1;
+                }
+                else
+                {
+                    SetInt_Plc($"PLC心跳响应", 1);
+                    SetInt_Plc($"出站心跳", 1);
+                    Thread.Sleep(1000);
+                    heartloop = 0;
+                }
+                
+      
                 Main.uC_StatesBar.uC_StatesBarVM.IsMomConnected = true;
                 Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = Brushes.LimeGreen;
-                //这里是设备链接状态刷新线程，没有刷新无法启动自动机程序
                 return true;
             }
             else
             {
                 Main.uC_StatesBar.uC_StatesBarVM.IsMomConnected = false;
                 Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = Brushes.Red;
-                //这里是设备链接状态刷新线程，没有刷新无法启动自动机程序
                 return false;
             }
-
-
-
-            ////这里是设备链接状态刷新线程，没有刷新无法启动自动机程序
-            //return true;
         }
         /// <summary>
         /// 自动机动作分解
@@ -499,194 +526,7 @@ namespace ZenergyBFSI.Model
         private void test()
         {
 
-        }
-
-        /// <summary>
-        /// 来料站交互  
-        /// 查询MOM返回结果
-        /// </summary>
-        private void ProductArrive(int no)
-        {
-            var res = GetInt($"PLC通道{no}来料触发");
-            //TODO
-            // 记录入站统计（看板数据更新）
-            //DashboardService.I.RecordArrive("1213854188", "NG", no);
-
-
-            //更换具体查询PLC地址
-            if (res==1)
-            {
-                string code = null;
-                //预留出PLC处理逻辑，现在来料存在复投来料
-                  code = "";
-                //获取码
-                code = GetCodeFromTunnal(no);
-
-                //待删除
-                var 调试中 = true;
-
-                //来料查询电芯码不合法
-                if (!LegalCode(code)&&!调试中)
-                {
-                    //SetInt($"扫码结果{no}", 2);
-                    UC_Operation.I.WriteLog($"工位{no}条码不合法");
-                }
-                else
-                {
-                    #region 处理复投的数据查询操作
-                    //如果存在复投的信号，那就去查询视觉数据库并处理复投逻辑，先处理复投给信号给对应的复投数组 
-                    var setreload = GetInt($"PLC通道{no}来料复投触发");
-
-           
-
-
-                    if (setreload == 1)
-                    {
-                        #region 处理复投信息处理，查询数据库
-                        var reloadSQLres = new List<T_BlueFilmDetection>();
-                        short[] reloadres = { 1, 2, 3, 4, 5, 6, 7, 8, (short)no, 0, 0, 0, 0, 0, 0 };
-                        //这时候一般数据库中都已经有了数据
-                        switch (no)
-                        {
-                            case 1: reloadSQLres = _localBlueFilmDetectionRepositoryA.GetByCellCode(code); break;
-                        }
-
-                        if (reloadSQLres.Count >= 1)
-                        {
-                            //不管如何都放入第一个查询到的检测结果
-                            reloadres = GetReloadres(reloadSQLres.First());
-                        }
-                        else
-                        {
-                            UC_Operation.I.WriteLog($"无法找到复投电芯码{code}", "Warn");
-                        }
-                         
-                        #endregion
-
-                        #region 设置复投信息写入PLC
-                        //设置复投信息
-
-                        var obj = PlcHandler.I.GetOBJ($"PLC通道{no}来料复投信息");
-                        var address = "";
-                        if (obj != null)
-                        {
-                            address = obj.Adress;
-                        }
-                        else
-                        {
-                            UC_Operation.I.WriteLog($"无法找到OBJ.{obj.Name}", "Error");
-                            Flag_Error++;
-                        }
-
-                        PlcHandler.I._omronFins.omronFinsNet.Write(address, reloadres);
-                        #endregion
-
-                        //PlcHandler.I._omronFins.omronFinsNet.Write($"PLC通道{no}来料复投信息", 1);
-                        //for( int i = 0; i < reloadres.Length; i++)
-                        //{
-                        //    PlcHandler.I._omronFins.omronFinsNet.Write($"PLC通道{no}来料复投信息", reloadres);
-                        //}
-                    }
-                    else
-                    {
-
-                    }
-                    #endregion
-                    //TODO
-
-                    #region 查询MOM数据信息，返回来料NG与OK
-                    var MOMRes = "";
-                    //MOM返回NG与OK
-                    //MOM查询电芯码结果
-                    var check = MomHandler.I.MomCheckIn(code);
-
-
-                    MOMRes = "OK";
-
-                    switch (check.Result)
-                    {
-                        case -1:
-                            UC_Operation.I.WriteLog($"MOM入站通讯等待...{code}"); break;
-                        case 0:
-                            UC_Operation.I.WriteLog($"MOM入站通讯开始...{code}"); break;
-                        case 1:
-                            {
-                                MOMRes  = "OK"; UC_Operation.I.WriteLog($"MOM入站OK{code}", "Success");
-                            }
-                            break;
-                        case 2:
-                        case 3:
-                            {
-                                MOMRes = "NG"; UC_Operation.I.WriteLog($"MOM入站NG{code}", "Success");
-                                //Rdb.QueueIn($"UPDATE CellData SET 入站结果 = '{data.入站结果}' WHERE 电芯码 ='{data.电芯码}'");
-                                UC_Operation.I.WriteLog($"MOM入站NG{code}", "Warn");
-                            }
-                            break;
-                        case 4:
-                            {
-                                MOMRes = "离线";
-                                //Rdb.QueueIn($"UPDATE CellData SET 入站结果 = '{data.入站结果}' WHERE 电芯码 ='{data.电芯码}'");
-                                UC_Operation.I.WriteLog($"MOM离线！{code}", "Warn");
-                            }
-                            break;
-                    }
-
-
-                    //设置完信号PLC物料就结束了
-                    if (MOMRes == "OK")
-                    {
-                        UC_Operation.I.WriteLog($"扫码工位{no}获取物料{code}MOM返回{MOMRes}", "Success");
-                        SetInt($"PLC通道{no}来料结果",1);
-                    }else if(MOMRes == "NG")
-                    {
-                        UC_Operation.I.WriteLog($"扫码工位{no}获取物料{code}MOM返回{MOMRes}", "Warn");
-                        SetInt($"PLC通道{no}来料结果", 2);
-                    }
-                    else
-                    {
-                        UC_Operation.I.WriteLog($"扫码工位{no}获取物料{code}MOM返回{MOMRes}", "Warn");
-                        SetInt($"PLC通道{no}来料结果", 2);
-                    }
-                    #endregion
-
-                    #region 处理自身的物料记录数据 
-                    //来料是否查询数据库、现在默认不查询
-                    var data = new CellData()
-                    {
-                        电芯码 = code,
-                        MOM查询来料状态 = MOMRes,
-                        进站时间 = DateTime.Now.ToString("yyyy/MM/dd/HH:mm:ss"),
-                        入站结果 = MOMRes,
-                        是否复投 = (setreload == 1), 
-                    };
-
-                    //暂时不管重复直接加入新的物料数据
-                    //Rdb.QueueIn($"UPDATE CellData SET 入站结果 = '{data.入站结果}' WHERE 电芯码 ='{data.电芯码}'");
-                    List<CellData> temp = new List<CellData>();
-                    temp.Add(data);
-                    //SQLiteGenericHelper.UpdateEntity<CellData>("CellData", "电芯码",)
-                    SQLiteGenericHelper.BulkUpsert<CellData>(temp, "电芯码", "CellData");
-                    //Rdb.QueuePro($@"INSERT INTO CellData (TimeStamp,电芯码,进站时间,MOM查询来料状态,入站结果,是否复投) VALUES ({data.TimeStamp},'{data.电芯码}','{data.进站时间}','{data.MOM查询来料状态}','{data.入站结果}','{data.是否复投}');");
-                    //这里可以针对重复进入的物料进行追踪处理
-                    //先查询是否已经存在了记录，否则就插入新的
-
-                    #endregion
-
-                    // 记录入站统计（看板数据更新）
-                    //DashboardService.I.RecordArrive(code, MOMRes, no);
-                }
-
-                //最后汇总
-            }
-            else
-            {
-                //没有触发的时候把自己的数据给复位掉
-                // SetIO($"来料工位{no}到位应答", false);
-                SetInt($"PLC通道{no}来料结果", 0);
-                //SetInt($"PLC通道{no}来料结果", 1);
-            }
-        }
-
+        } 
         /// <summary>
         /// 传入蓝膜检测记录实体并返回已经检测过的信息short数组
         /// </summary>
@@ -823,30 +663,88 @@ namespace ZenergyBFSI.Model
         }
         /// <summary>
         /// 这里处理SQLServer查询后更新物料信息
+        /// 只查询关于检测到的所有NG
         /// </summary>
         /// <param name="data"></param>
-        private void UpdateCellDataFromSQLserver(ref CellData data)
+        public void UpdateCellDataFromSQLserver(ref CellData data)
         {
-            //此处处理视觉信息的装填  这里不负责具体的内容，因此存储信息的时候装入
-            T_HarnessMeasure temp = new T_HarnessMeasure() ;
-            //查询所有的三个工控机的所有信息
-            //A工控机
-            foreach (var item in _localHarnessMeasureRepositoryA.GetByPackCode(data.电芯码))
+            #region 存储过程验证 — 验证完删除
             {
-                temp = item;
+                var tag = $"SPTEST_{DateTime.Now:HHmmss}";
+                int ok = 0, fail = 0;
+                void Chk(string n, bool c) { if (c) ok++; else fail++; Rlog.Debug($"  [{(c ? "PASS" : "FAIL")}] {n}"); }
+
+                // ── T_BlueFilmDetection (2 SP) ──
+                var repoBFD = new BlueFilmDetectionRepository(CONNECTION_STRINGA);
+                var codeBFD = $"{tag}_BFD";
+                var numBfd = repoBFD.Insert(new T_BlueFilmDetection
+                {
+                    CellType = "T", CellCode = codeBFD, Reinvestment = 0,
+                    DetectionArea = "A", DetectionResults = "OK", NGtypeNum = 0,
+                    CreateTime = DateTime.Now
+                });
+                Chk("Proc_InsertBlueFilmDetection", numBfd != null);
+                Chk("PROC_GetBlueFilmDetection", repoBFD.GetByCellCode(codeBFD).Count > 0);
+                if (numBfd != null) repoBFD.Delete(numBfd.Value);
+
+                // ── T_BlueFilmDataMOM (2 SP) ──
+                var repoMOM = new BlueFilmDataMOMRepository(CONNECTION_STRINGA);
+                var codeMOM = $"{tag}_MOM";
+                var numMom = repoMOM.Insert(new T_BlueFilmDataMOM
+                {
+                    SideCellType = "T", CellCode = codeMOM,
+                    DetectionArea = "A", DetectionResults = "OK", NGtypeNum = 0,
+                    CreateTime = DateTime.Now,
+                    ParamterCode = "TEST_CODE",
+                    ParameterDesc = "测试缺陷#1-参数A",
+                    Value = "3.2",
+                    UpperLimit = "5.0",
+                    LowerLomit = "0.5",
+                    TargetValue = "2.0",
+                    Unit = "mm",
+                    ParameterResult = "OK"
+                });
+                Chk("Proc_InsertBlueFilmDataMOM", numMom != null);
+                Chk("PROC_GetBlueFilmDataMOM", repoMOM.GetByCellCode(codeMOM).Count > 0);
+                var momResult = repoMOM.GetByCellCode(codeMOM).FirstOrDefault();
+                Chk("  新列 ParamterCode", momResult != null && momResult.ParamterCode == "TEST_CODE");
+                Chk("  新列 ParameterDesc", momResult != null && momResult.ParameterDesc == "测试缺陷#1-参数A");
+                Chk("  新列 Value", momResult != null && momResult.Value == "3.2");
+                Chk("  新列 Unit", momResult != null && momResult.Unit == "mm");
+                Chk("  新列 ParameterResult", momResult != null && momResult.ParameterResult == "OK");
+                if (numMom != null) repoMOM.Delete(numMom.Value);
+
+                // ── T_BlueFilmRecipeParameters (6 SP) ──
+                var repoRP = new BlueFilmRecipeParametersRepository(CONNECTION_STRINGA);
+                var pid = $"{tag}_RP";
+                Chk("Proc_InsertBlueFilmRecipeParameters", repoRP.Insert(new T_BlueFilmRecipeParameters
+                {
+                    ParameterID = pid, ParameterName = "测试", ParameterType = "float",
+                    Description = "验证", Enable = 1, status = "启用",
+                    UpperSpecificationsLimit = "100", LowerSpecificationsLimit = "10",
+                    Unit = "ms", ACK = 1, UpdateTime = DateTime.Now
+                }) > 0);
+                var r = repoRP.GetByParameterID(pid);
+                Chk("GetByParameterID (sp)", r != null && r.ParameterName == "测试");
+                Chk("GetAll (sp)", repoRP.GetAll().Count > 0);
+                Chk("GetCount (sp)", repoRP.GetCount() > 0);
+                if (r != null) { r.Description = "UPD"; r.status = "禁用"; Chk("Update (sp)", repoRP.Update(r) > 0); }
+                Chk("Delete (sp)", repoRP.Delete(pid) > 0);
+                Chk("验证Delete (sp)", repoRP.GetByParameterID(pid) == null);
+
+                Rlog.Debug($"═══ SP验证完成: {ok}/{(ok + fail)} 通过 ═══");
             }
-            //判断是否合法的数据，不合法就填入默认查询失败的数据
-            if (temp.PackCode.Length > 5)
-            {
-                data.视觉检测参数一 ="描述一:"+ temp.Width1.ToString();
-                data.视觉检测参数二 = "描述二:"+   temp.Width2.ToString();
-                data.视觉检测参数三 = "描述三:"+   temp.Width3.ToString();
-                data.视觉检测参数四 = "描述四:"+   temp.Width4.ToString();
-                data.视觉检测参数五 = "描述五:"+   temp.Width5.ToString();
-                data.视觉检测参数六 = "描述六:"+   temp.Width6.ToString();
-                data.视觉检测状态 =   "视觉检测状态:" +   temp.MarkNumber.ToString();
-                data.视觉检测结果 =   "结果:" +   temp.Result.ToString();
-            } 
+            #endregion
+
+            // 收集该物料在所有工控机上的检测记录
+            List<T_BlueFilmDetection> temp = new List<T_BlueFilmDetection>();
+            // A工控机
+            foreach (var item in _localBlueFilmDetectionRepositoryA.GetByCellCode(data.电芯码))
+                temp.Add(item);
+            // TODO: B工控机 _localBlueFilmDetectionRepositoryB
+            // TODO: C工控机 _localBlueFilmDetectionRepositoryC
+
+            // 默认值
             data.视觉检测参数一 = "视觉检测参数SQLServer";
             data.视觉检测参数二 = "视觉检测参数SQLServer";
             data.视觉检测参数三 = "视觉检测参数SQLServer";
@@ -854,20 +752,71 @@ namespace ZenergyBFSI.Model
             data.视觉检测参数五 = "视觉检测参数SQLServer";
             data.视觉检测参数六 = "视觉检测参数SQLServer";
             data.视觉检测状态 = "视觉检测参数SQLServer";
-            data.视觉检测结果 = "NG";  // TODO: 临时写死为NG以便测试饼图，正式应接真实检测结果
-            data.Ng类型数量 = 3;
-            // TODO: 以下临时数据用于测试饼图显示，正式应接真实缺陷类型字段
-            // 真实来源例如: temp.DefectType 或 temp.NgReason 等字段
-            data.Ng类型1 = "外观缺陷";
-            data.Ng类型2 = "尺寸超差";
-            data.Ng类型3 = "性能不合格";
-            data.Ng类型4 = "";  // TODO: 接真实缺陷类型4
-            data.Ng类型5 = "";  // TODO: 接真实缺陷类型5
-            data.Ng类型6 = "";  // TODO: 接真实缺陷类型6
-            data.Ng类型7 = "";  // TODO: 接真实缺陷类型7
-            data.Ng类型8 = "";  // TODO: 接真实缺陷类型8
-            data.出站结果 = "NG";
-            //data.视觉检测结果 = "视觉检测结果SQLServer";
+            data.Ng类型数量 = 0;
+            data.出站结果 = "OK";
+
+            if (temp.Count == 0) return;
+
+            // 按 DetectionArea 分组，每组去重统计缺陷
+            var areaGroups = temp
+                .Where(t => t.DetectionResults != "OK"
+                    && !string.IsNullOrEmpty(t.DetectionArea))
+                .GroupBy(t => t.DetectionArea.Trim());
+
+            var ngFields = new[] { data.Ng类型1, data.Ng类型2, data.Ng类型3,
+                                    data.Ng类型4, data.Ng类型5, data.Ng类型6,
+                                    data.Ng类型7, data.Ng类型8 };
+            int ngIndex = 0;
+
+            foreach (var areaGroup in areaGroups)
+            {
+                if (ngIndex >= 8) break; // 最多 8 个槽位
+
+                // 收集该面所有记录的 NGtype1~3，去重计数
+                var defectCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var record in areaGroup)
+                {
+                    foreach (var ng in new[] { record.NGtype1, record.NGtype2, record.NGtype3 })
+                    {
+                        var ngVal = ng?.Trim();
+                        if (!string.IsNullOrEmpty(ngVal))
+                        {
+                            if (defectCounts.ContainsKey(ngVal))
+                                defectCounts[ngVal]++;
+                            else
+                                defectCounts[ngVal] = 1;
+                        }
+                    }
+                }
+
+                if (defectCounts.Count == 0) continue;
+
+                // 拼接: "面X外观缺陷缺陷1×2,缺陷2×1"
+                var defectStr = string.Join(",", defectCounts.Select(kv => $"{kv.Key}×{kv.Value}"));
+                var ngValue = $"{areaGroup.Key}外观缺陷{defectStr}";
+
+                // 固定 Ng类型1~8 对应不同面
+                SetNgField(ref data, ngIndex, ngValue);
+                ngIndex++;
+                data.出站结果 = "NG";
+            }
+
+            data.Ng类型数量 = ngIndex;
+        }
+
+        private static void SetNgField(ref CellData data, int index, string value)
+        {
+            switch (index)
+            {
+                case 0: data.Ng类型1 = value; break;
+                case 1: data.Ng类型2 = value; break;
+                case 2: data.Ng类型3 = value; break;
+                case 3: data.Ng类型4 = value; break;
+                case 4: data.Ng类型5 = value; break;
+                case 5: data.Ng类型6 = value; break;
+                case 6: data.Ng类型7 = value; break;
+                case 7: data.Ng类型8 = value; break;
+            }
         }
 
         private int getlead(CellData data)
@@ -1014,7 +963,7 @@ namespace ZenergyBFSI.Model
                 string code = "";
                 //这里有个问题，如果PLC不存二维码这里无法获取有效二维码，存在绑错二维码的风险
                 code = GetCodeFromTunnal(no);
-               Rdb.SelectList(out List<CellData> t, $"SELECT * from CellData WHERE 电芯码 = {code}");
+               Rdb.SelectList(out List<CellData> t, $"SELECT * from CellData WHERE 电芯码 = '{code}'");
                 var data = t.FirstOrDefault(i => i.电芯码 == code);
                 //本地存储操作视觉检测操作数据
 
@@ -1040,6 +989,21 @@ namespace ZenergyBFSI.Model
         bool LegalCode(string code)
         {
             return !string.IsNullOrEmpty(code);
+        }
+
+        /// <summary>
+        /// short[] → byte[] 转换，用于 PLCHandler Write（逐元素小端序）
+        /// </summary>
+        private static byte[] ShortArrayToBytes(int[] values)
+        {
+            var bytes = new byte[values.Length * 2];
+            for (int i = 0; i < values.Length; i++)
+            {
+                var pair = BitConverter.GetBytes(values[i]);
+                bytes[i * 2] = pair[0];
+                bytes[i * 2 + 1] = pair[1];
+            }
+            return bytes;
         }
 
         /// <summary>
@@ -1216,187 +1180,155 @@ namespace ZenergyBFSI.Model
 
         }
 
+        /// <summary>读取 PLC 布尔信号（从缓存），UShort 值 1=true, 0=false</summary>
         public bool GetIO(string name)
         {
-            var obj = PlcHandler.I.GetOBJ(name);
-            if (obj != null)
-            {
-                return obj.vBool;
-            }
-            else
-            {
-                UC_Operation.I.WriteLog($"无法找到OBJ.{name}", "Error");
-                Flag_Error++;
-                return false;
-            }
+            if (_monitor != null && _monitor.TryGetLatestByName(name, out var r) && r.IsOk)
+                return Convert.ToInt32(r.Value) == 1;
+            UC_Operation.I.WriteLog($"无法找到信号.{name}", "Error");
+            Flag_Error++;
+            return false;
         }
 
+        /// <summary>读取 PLC 浮点信号（从缓存）</summary>
         public float GetFloat(string name)
         {
-            var obj = PlcHandler.I.GetOBJ(name);
-            if (obj != null)
-            {
-                return obj.vFloat;
-            }
-            else
-            {
-                UC_Operation.I.WriteLog($"无法找到OBJ.{name}", "Error");
-                Flag_Error++;
-                return 0;
-            }
+            if (_monitor != null && _monitor.TryGetLatestByName(name, out var r) && r.IsOk)
+                return Convert.ToSingle(r.Value);
+            UC_Operation.I.WriteLog($"无法找到信号.{name}", "Error");
+            Flag_Error++;
+            return 0;
         }
 
+        /// <summary>读取 PLC 整数信号（从缓存）</summary>
         public int GetInt(string name)
         {
-            var obj = PlcHandler.I.GetOBJ(name);
-            if (obj != null)
-            {
-                var resint=  int.Parse( PlcHandler.I._omronFins.omronFinsNet.ReadUInt16(obj.Adress).Content.ToString());
-                return resint;
-            }
-            else
-            {
-                UC_Operation.I.WriteLog($"无法找到OBJ.{name}", "Error");
-                Flag_Error++;
-                return 0;
-            }
+            if (_monitor != null && _monitor.TryGetLatestByName(name, out var r) && r.IsOk)
+                return Convert.ToInt32(r.Value);
+            UC_Operation.I.WriteLog($"无法找到信号.{name}", "Error");
+            Flag_Error++;
+            return 0;
         }
+
+        /// <summary>读取 PLC 字符串信号（从缓存）</summary>
         public string GetString(string name)
         {
-            var obj = PlcHandler.I.GetOBJ(name);
-            
-            if (obj != null)
-            {
-                try
-                {
-                    var resstr = PlcHandler.I._omronFins.omronFinsNet.ReadString(obj.Adress, 15);
-                    if (resstr.IsSuccess)
-                    {
-                        var temp = resstr.Content.ToString();
-                        return temp;
-                    }
-                    else
-                    {
-                        return "";
-                    }
-
-                }catch(Exception e)
-                {
-                    return "";
-                }
-
-            }
-            else
-            {
-                UC_Operation.I.WriteLog($"无法找到OBJ.{name}", "Error");
-                Flag_Error++;
-                return null;
-            }
+            if (_monitor != null && _monitor.TryGetLatestByName(name, out var r) && r.IsOk)
+                return r.Value?.ToString() ?? "";
+            UC_Operation.I.WriteLog($"无法找到信号.{name}", "Error");
+            Flag_Error++;
+            return null;
         }
+
+        /// <summary>信号同步状态 — PLCHandler 缓存始终同步，始终返回 true</summary>
         public bool Sync(string name)
         {
-            var obj = PlcHandler.I.GetOBJ(name);
-            if (obj != null)
-            {
-                return obj.oSync;
-            }
-            else
-            {
-                UC_Operation.I.WriteLog($"无法找到OBJ.{name}", "Error");
-                Flag_Error++;
-                return false;
-            }
+            if (_monitor != null && _monitor.TryGetLatestByName(name, out var r) && r.IsOk)
+                return true;
+            UC_Operation.I.WriteLog($"无法找到信号.{name}", "Error");
+            Flag_Error++;
+            return false;
         }
-        /// <returns>返回结果是否已经写入PLC</returns>
+        /// <summary>向 PLC 写入整数（UShort），使用 PLCHandler WriteByNameAsync</summary>
         public bool SetInt(string name, int value)
         {
-            var obj = PlcHandler.I.GetOBJ(name);
-            var resint = int.Parse(PlcHandler.I._omronFins.omronFinsNet.ReadUInt16(obj.Adress).Content.ToString());
-
-            if (obj != null)
+            if (_monitor == null || !_monitor.TryGetSignalByName(name, out _))
             {
-                if (resint != value)
-                {
-                    obj.vInt = value;
-                    PlcHandler.I._omronFins.omronFinsNet.Write(obj.Adress, value);
-                    obj.oSync = false;
-                    UC_Operation.I.WriteLog($"{name}=>{value}", "Info");
-                }
-                return obj.oSync;
-            }
-            else
-            {
-                UC_Operation.I.WriteLog($"无法找到OBJ.{name}", "Error");
+                UC_Operation.I.WriteLog($"无法找到信号.{name}", "Error");
                 Flag_Error++;
-                return obj.oSync;
+                return false;
             }
-        }
-        public bool SetString(string name, string value)
-        {
-            var obj = PlcHandler.I.GetOBJ(name);
-            if (obj != null)
+            try
             {
-                if (obj.vString != value)
-                {
-                    obj.vString = value;
-                    obj.oSync = false;
-                    UC_Operation.I.WriteLog($"{name}=>{value}", "Info");
-                }
-                return obj.oSync;
+                var data = BitConverter.GetBytes((ushort)value);
+                var result = _monitor.WriteByNameAsync(name, data).GetAwaiter().GetResult();
+                if (result.IsOk) { UC_Operation.I.WriteLog($"{name}=>{value}", "Info"); return true; }
+                UC_Operation.I.WriteLog($"写入PLC失败 {name}: {result.Error}", "Error");
+                return false;
             }
-            else
+            catch (Exception ex)
             {
-                UC_Operation.I.WriteLog($"无法找到OBJ.{name}", "Error");
+                UC_Operation.I.WriteLog($"写入PLC异常 {name}: {ex.Message}", "Error");
                 Flag_Error++;
                 return false;
             }
         }
+
+        /// <summary>向 PLC 写入字符串，使用 PLCHandler WriteByNameAsync</summary>
+        public bool SetString(string name, string value)
+        {
+            if (_monitor == null || !_monitor.TryGetSignalByName(name, out _))
+            {
+                UC_Operation.I.WriteLog($"无法找到信号.{name}", "Error");
+                Flag_Error++;
+                return false;
+            }
+            try
+            {
+                var data = System.Text.Encoding.ASCII.GetBytes(value ?? "");
+                var result = _monitor.WriteByNameAsync(name, data).GetAwaiter().GetResult();
+                if (result.IsOk) { UC_Operation.I.WriteLog($"{name}=>{value}", "Info"); return true; }
+                UC_Operation.I.WriteLog($"写入PLC失败 {name}: {result.Error}", "Error");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                UC_Operation.I.WriteLog($"写入PLC异常 {name}: {ex.Message}", "Error");
+                Flag_Error++;
+                return false;
+            }
+        }
+
+        /// <summary>向 PLC 写入布尔值（0/1 字节），使用 PLCHandler WriteByNameAsync</summary>
         public bool SetIO(string name, bool value)
         {
-            var obj = PlcHandler.I.GetOBJ(name);
-            if (obj != null)
+            if (_monitor == null || !_monitor.TryGetSignalByName(name, out _))
             {
-                if (obj.vBool != value)
-                {
-                    obj.vBool = value;
-                    obj.oSync = false;
-                    if (name == ("心跳应答"))
-                    {
-                        UC_Operation.I.WriteLog($"{name}=>{value}");
-                        TS = DataHelper.TimeMS;
-                    }
-                    else
-                    {
-                        UC_Operation.I.WriteLog($"{name}=>{value}", "Debug");
-                    }
-                }
-                return obj.oSync;
+                UC_Operation.I.WriteLog($"无法找到信号.{name}", "Error");
+                Flag_Error++;
+                return false;
             }
-            else
+            try
             {
-                UC_Operation.I.WriteLog($"无法找到OBJ.{name}", "Error");
+                var data = new byte[] { (byte)(value ? 1 : 0) };
+                var result = _monitor.WriteByNameAsync(name, data).GetAwaiter().GetResult();
+                if (result.IsOk)
+                {
+                    if (name == "心跳应答") { UC_Operation.I.WriteLog($"{name}=>{value}"); TS = DataHelper.TimeMS; }
+                    else UC_Operation.I.WriteLog($"{name}=>{value}", "Debug");
+                    return true;
+                }
+                UC_Operation.I.WriteLog($"写入PLC失败 {name}: {result.Error}", "Error");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                UC_Operation.I.WriteLog($"写入PLC异常 {name}: {ex.Message}", "Error");
                 Flag_Error++;
                 return false;
             }
         }
         #endregion
-        #region Thread-Safe PLC/MOM Wrappers
+        #region Thread-Safe PLC/MOM Wrappers (PLCHandler)
+
         /// <summary>
-        /// 线程安全PLC读取 (GetInt)，带超时保护
+        /// PLC 整数直接读取 — 不走缓存，PLCHandler 内部线程安全
         /// </summary>
-        private int GetInt_Plc(string name, int timeoutMs = 3000)
+        private async Task<int> GetInt_Plc(string name, int timeoutMs = 3000)
         {
-            if(PlcHandler.I._omronFins is null) return 0;
-            var result = 0;
-            var cts = new CancellationTokenSource(timeoutMs);
+            if (_monitor == null) return 0;
+            using var cts = new CancellationTokenSource(timeoutMs);
             try
             {
-                lock (_plcLock)
+                var result = await _monitor.ReadOnceByNameAsync(name);
+                if (result.IsOk)
                 {
-                    var obj = PlcHandler.I.GetOBJ(name);
-                    if (obj == null) { UC_Operation.I.WriteLog($"无法找到OBJ.{name}", "Error"); Flag_Error++; return 0; }
-                    result = int.Parse(PlcHandler.I._omronFins.omronFinsNet.ReadUInt16(obj.Adress).Content.ToString());
+                    { UC_Operation.I.WriteLog($"读取{name}=>{result.Value}", "Info");}
+                    return Convert.ToInt32(result.Value);
                 }
+                Rlog.Error($"PLC读取失败 [{name}]: {result.Error}");
+                Flag_Error++;
+                return -1;
             }
             catch (OperationCanceledException)
             {
@@ -1410,133 +1342,91 @@ namespace ZenergyBFSI.Model
                 Flag_Error++;
                 return -1;
             }
-            finally { cts.Dispose(); }
-            return result;
         }
 
         /// <summary>
-        /// 线程安全PLC写入 (SetInt)
+        /// PLC 字符串直接读取 — 不走缓存，线程安全
         /// </summary>
-        private bool SetInt_Plc(string name, int value)
+        private async Task<string> GetString_Plc(string name)
         {
-            lock (_plcLock)
+            if (_monitor == null) return null;
+            try
             {
-                try
-                {
-                    var obj = PlcHandler.I.GetOBJ(name);
-                    if (obj == null)
-                    {
-                        UC_Operation.I.WriteLog($"无法找到OBJ.{name}", "Error");
-                        Flag_Error++;
-                        return false;
-                    }
-                    var resint = int.Parse(PlcHandler.I._omronFins.omronFinsNet.ReadUInt16(obj.Adress).Content.ToString());
-                    if (resint != value)
-                    {
-                        obj.vInt = value;
-                        PlcHandler.I._omronFins.omronFinsNet.Write(obj.Adress, value);
-                        obj.oSync = false;
-                        UC_Operation.I.WriteLog($"{name}=>{value}", "Info");
-                    }
-                    return obj.oSync;
-                }
-                catch (Exception ex)
-                {
-                    Rlog.Error($"PLC写入异常 [{name}]: {ex.Message}");
-                    Flag_Error++;
-                    return false;
-                }
+                var result = await _monitor.ReadOnceByNameAsync(name);
+                if (result.IsOk)
+                    return result.Value?.ToString() ?? "";
+                Rlog.Error($"PLC字符串读取失败 [{name}]: {result.Error}");
+                Flag_Error++;
+                return "";
+            }
+            catch (Exception ex)
+            {
+                Rlog.Error($"PLC字符串读取异常 [{name}]: {ex.Message}");
+                Flag_Error++;
+                return "";
             }
         }
 
         /// <summary>
-        /// 线程安全PLC字符串读取 (GetString)
+        /// PLC 整数写入（UShort），使用 PLCHandler WriteByNameAsync，线程安全
         /// </summary>
-        private string GetString_Plc(string name)
+        private async Task<bool> SetInt_Plc(string name, int value)
         {
-            lock (_plcLock)
+            if (_monitor == null || !_monitor.TryGetSignalByName(name, out _))
             {
-                try
-                {
-                    var obj = PlcHandler.I.GetOBJ(name);
-                    if (obj != null)
-                    {
-                        var resstr = PlcHandler.I._omronFins.omronFinsNet.ReadString(obj.Adress, 15);
-                        if (resstr.IsSuccess)
-                            return resstr.Content.ToString();
-                        return "";
-                    }
-                    return null;
-                }
-                catch (Exception ex)
-                {
-                    Rlog.Error($"PLC字符串读取异常 [{name}]: {ex.Message}");
-                    Flag_Error++;
-                    return "";
-                }
+                UC_Operation.I.WriteLog($"无法找到信号.{name}", "Error");
+                Flag_Error++;
+                return false;
+            }
+            try
+            {
+                var data = BitConverter.GetBytes((int)value);
+                var result = await _monitor.WriteByNameAsync(name, value);
+                if (result.IsOk) { UC_Operation.I.WriteLog($"{name}=>{value}", "Info"); return true; }
+                UC_Operation.I.WriteLog($"写入PLC失败 [{name}]: {result.Error}", "Error");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Rlog.Error($"PLC写入异常 [{name}]: {ex.Message}");
+                Flag_Error++;
+                return false;
             }
         }
 
         /// <summary>
-        /// 线程安全PLC bool写入 (SetIO)
+        /// PLC 布尔写入（0/1 字节），使用 PLCHandler WriteByNameAsync，线程安全
         /// </summary>
-        private bool SetIO_Plc(string name, bool value)
+        private async Task<bool> SetIO_Plc(string name, bool value)
         {
-            lock (_plcLock)
+            if (_monitor == null || !_monitor.TryGetSignalByName(name, out _))
             {
-                try
+                UC_Operation.I.WriteLog($"无法找到信号.{name}", "Error");
+                Flag_Error++;
+                return false;
+            }
+            try
+            {
+                var data = new byte[] { (byte)(value ? 1 : 0) };
+                var result = await _monitor.WriteByNameAsync(name, data);
+                if (result.IsOk)
                 {
-                    var obj = PlcHandler.I.GetOBJ(name);
-                    if (obj == null)
-                    {
-                        UC_Operation.I.WriteLog($"无法找到OBJ.{name}", "Error");
-                        Flag_Error++;
-                        return false;
-                    }
-                    if (obj.vBool != value)
-                    {
-                        obj.vBool = value;
-                        obj.oSync = false;
-                        if (name == "心跳应答")
-                        {
-                            UC_Operation.I.WriteLog($"{name}=>{value}");
-                            TS = DataHelper.TimeMS;
-                        }
-                        else
-                        {
-                            UC_Operation.I.WriteLog($"{name}=>{value}", "Debug");
-                        }
-                    }
-                    return obj.oSync;
+                    if (name == "心跳应答") { UC_Operation.I.WriteLog($"{name}=>{value}"); TS = DataHelper.TimeMS; }
+                    else UC_Operation.I.WriteLog($"{name}=>{value}", "Debug");
+                    return true;
                 }
-                catch (Exception ex)
-                {
-                    Rlog.Error($"PLC bool写入异常 [{name}]: {ex.Message}");
-                    Flag_Error++;
-                    return false;
-                }
+                UC_Operation.I.WriteLog($"写入PLC失败 [{name}]: {result.Error}", "Error");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Rlog.Error($"PLC bool写入异常 [{name}]: {ex.Message}");
+                Flag_Error++;
+                return false;
             }
         }
 
-        /// <summary>
-        /// 线程安全MOM查询
-        /// </summary>
-        private dynamic MomCheckIn_Safe(string code)
-        {
-            lock (_momLock)
-            {
-                try
-                {
-                    return MomHandler.I.MomCheckIn(code);
-                }
-                catch (Exception ex)
-                {
-                    Rlog.Error($"MOM查询异常 [{code}]: {ex.Message}");
-                    Flag_Error++;
-                    return null;
-                }
-            }
-        }
+
 
         #endregion
 
@@ -1578,107 +1468,162 @@ namespace ZenergyBFSI.Model
 
             public async Task<bool> WaitForSignalAsync(CancellationToken token)
             {
-                // 边缘检测：仅当 TriggerLast=0 且 trigger=1 时返回 true
-                await Task.CompletedTask;
+                var trigger = await _owner.GetInt_Plc($"PLC通道{_channelNo}来料触发");
+               
+                if (trigger <= 0) 
+                { 
+                    _state.Processing = false;
+                    await _owner.SetInt_Plc($"PLC通道{_channelNo}来料结果",0);
+                    this._state.TriggerLast = 0;
+                    return false;
+                }
 
-                var trigger = _owner.GetInt_Plc($"PLC通道{_channelNo}来料触发");
-
-                if (trigger == 0) { _state.Processing = false;  } // 无触发或超时
-
-                if (trigger == _state.TriggerLast) { return false; } // 电平未变，跳过
-
+                return trigger == 1;
+                if (trigger == _state.TriggerLast)
+                {
+                    _state.TriggerLast = trigger;
+                    return false;
+                }
+                  
 
                 _state.TriggerLast = trigger;
 
                 // 状态锁存：防止重复执行
-                if (_state.Processing) { return false; }
+                if (_state.Processing) return false;
                 _state.Processing = true;
 
-
-                if (trigger == 1)
-                    return true;
-                else
-                    return false;
+                return trigger == 1;
             }
 
             public async Task ExecuteActionAsync(CancellationToken token)
             {
                 try
                 {
-                    string code = _owner.GetString_Plc($"PLC通道{_channelNo}来料电芯码").Trim('\0');
-                    if (string.IsNullOrEmpty(code))
+                    var codeRaw = await _owner.GetString_Plc($"PLC通道{_channelNo}来料电芯码");
+                    string code = codeRaw?.Trim('\0') ?? "";
+                    code = code?.Replace("\0", "") ?? "";
+                    if (string.IsNullOrEmpty(code)&& code.Length>=23)
                     {
                         UC_Operation.I.WriteLog($"扫码工位{_channelNo}获取产品电芯码异常", "Warn");
+                        await _owner.SetInt_Plc($"PLC通道{_channelNo}来料结果", 2);
                         return;
                     }
 
                     // 复投逻辑
-                    var setreload = _owner.GetInt_Plc($"PLC通道{_channelNo}来料复投触发");
+                    var setreload = await _owner.GetInt_Plc($"PLC通道{_channelNo}来料复投触发");
                     if (setreload == 1)
                     {
                         var reloadSQLres = new List<T_BlueFilmDetection>();
                         short[] reloadres = { 1, 2, 3, 4, 5, 6, 7, 8, (short)_channelNo, 0, 0, 0, 0, 0, 0 };
-                        switch (_channelNo)
+                        //switch (_channelNo)
+                        //{
+                        //    case 1: reloadSQLres = _owner._localBlueFilmDetectionRepositoryA.GetByCellCode(code); break;
+                        //}
+
+                        // 原始数据（根据你之前代码中的 reloadres 应该是 short[]）
+                        short[] shortArray = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+
+                        // 转换为大端字节数组（每个 short 占 2 字节）
+                        byte[] result = new byte[shortArray.Length * 2];
+                        for (int i = 0; i < shortArray.Length; i++)
                         {
-                            case 1: reloadSQLres = _owner._localBlueFilmDetectionRepositoryA.GetByCellCode(code); break;
+                            byte[] bytes = BitConverter.GetBytes(shortArray[i]);
+                            if (BitConverter.IsLittleEndian)
+                                Array.Reverse(bytes);   // 转为大端
+                            Array.Copy(bytes, 0, result, i * 2, 2);
                         }
+
+                        // 写入 PLC（地址应为字地址，如 DBW0）
+                        await _owner._monitor.WriteByNameAsync($"PLC通道{_channelNo}来料复投信息", result);
+
+
                         if (reloadSQLres.Count >= 1)
                             reloadres = _owner.GetReloadres(reloadSQLres.First());
                         else
                             UC_Operation.I.WriteLog($"无法找到复投电芯码{code}", "Warn");
 
-                        var obj = PlcHandler.I.GetOBJ($"PLC通道{_channelNo}来料复投信息");
-                        if (obj != null)
-                        {
-                            lock (_plcLock)
-                            {
-                                PlcHandler.I._omronFins.omronFinsNet.Write(obj.Adress, reloadres);
-                            }
-                        }
-                        else
-                        {
-                            UC_Operation.I.WriteLog($"无法找到PLC通道{_channelNo}来料复投信息", "Error");
-                            _owner.Flag_Error++;
-                        }
+                        // 复投信息写入 PLC — 使用 PLCHandler
+                        //var reloadData = ShortArrayToBytes(reloadres);
+                        //var writeResult = await _owner._monitor.WriteByNameAsync(
+                        //    $"PLC通道{_channelNo}来料复投信息", reloadData);
+                        //if (!writeResult.IsOk)
+                        //{
+                        //    UC_Operation.I.WriteLog($"写入复投信息失败: {writeResult.Error}", "Error");
+                        //    _owner.Flag_Error++;
+                        //}
                     }
 
                     // MOM查询
-                    var MOMRes = "OK";
-                重新查询:
-                    var check = _owner.MomCheckIn_Safe(code);
-                    switch (check?.Result)
+                    string MOMRes;
+                    try
                     {
-                        case -1: UC_Operation.I.WriteLog($"MOM入站通讯等待...{code}"); break; goto 重新查询;  
-                        case 0: UC_Operation.I.WriteLog($"MOM入站通讯开始...{code}"); break; goto 重新查询;
-                        case 1: MOMRes = "OK"; UC_Operation.I.WriteLog($"MOM入站OK{code}", "Success"); break;
-                        case 2:
-                        case 3: MOMRes = "NG"; UC_Operation.I.WriteLog($"MOM入站NG{code}", "Warn"); break;
-                        case 4: MOMRes = "离线"; UC_Operation.I.WriteLog($"MOM离线！{code}", "Warn"); break;
-                        default: MOMRes = "NG"; break;
+                        var check = await MomHandler.I.CheckInAsync(code);
+                        check = new MomCheckResult();
+                        check.Result = MomResultCode.Ok;
+                        switch (check.Result)
+                        {
+                            case MomResultCode.Ok:
+                                MOMRes = "OK";
+                                UC_Operation.I.WriteLog($"MOM入站OK{code}", "Success");
+                                break;
+                            case MomResultCode.Ng:
+                            case MomResultCode.Failed:
+                                MOMRes = "NG";
+                                UC_Operation.I.WriteLog($"MOM入站NG{code}", "Warn");
+                                break;
+                            case MomResultCode.Offline:
+                                MOMRes = "离线";
+                                UC_Operation.I.WriteLog($"MOM离线！{code}", "Warn");
+                                break;
+                            default:
+                                MOMRes = "NG";
+                                break;
+                        }
                     }
-                    MOMRes = "OK";
+                    catch (Exception ex)
+                    {
+                        Rlog.Error($"MOM查询异常 [{code}]: {ex.Message}");
+                        _owner.Flag_Error++;
+                        MOMRes = "NG";
+                    }
                     if (MOMRes == "OK")
                     {
                         UC_Operation.I.WriteLog($"扫码工位{_channelNo}获取物料{code}MOM返回{MOMRes}", "Success");
-                        _owner.SetInt_Plc($"PLC通道{_channelNo}来料结果", 1);
+                        await _owner.SetInt_Plc($"PLC通道{_channelNo}来料结果", 1);
                     }
                     else
                     {
                         UC_Operation.I.WriteLog($"扫码工位{_channelNo}获取物料{code}MOM返回{MOMRes}", "Warn");
-                        _owner.SetInt_Plc($"PLC通道{_channelNo}来料结果", 2);
+                        await _owner.SetInt_Plc($"PLC通道{_channelNo}来料结果", 2);
                     }
 
                     var data = new CellData()
                     {
                         电芯码 = code,
+                        检验位置 = $"工位{_channelNo}",
                         MOM查询来料状态 = MOMRes,
-                        进站时间 = DateTime.Now.ToString("yyyy/MM/dd/HH:mm:ss"),
+                        进站时间 = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"),
                         入站结果 = MOMRes,
-                        是否复投 = (setreload == 1),
+                        是否复投 = (setreload == 1)?"是":"否",
                     };
                     var temp = new List<CellData> { data };
                     SQLiteGenericHelper.BulkUpsert<CellData>(temp, "电芯码", "CellData");
-                    //DashboardService.I.RecordArrive(code, MOMRes, _channelNo);
+
+                    #region 模拟数据
+                    // 在真实入站记录之外额外插入模拟记录，让看板"检测中"计数和时段分布有数据可看。
+                    // 正式环境删除此 region。
+                    var simData = new CellData()
+                    {
+                        电芯码 = $"SIM-{_channelNo}-{DateTime.Now:HHmmss}",
+                        检验位置 = $"工位{_channelNo}",
+                        进站时间 = DateTime.Now.AddMinutes(-new Random().Next(1, 60)).ToString("yyyy/MM/dd HH:mm:ss"),
+                        入站结果 = "OK",
+                        MOM查询来料状态 = "模拟-OK",
+                        是否复投 = "否",
+                    };
+                    var simList = new List<CellData> { simData };
+                    //SQLiteGenericHelper.BulkUpsert<CellData>(simList, "电芯码", "CellData");
+                    #endregion
 
                     _state.LastCode = code;
                     _state.LastProcessTime = DateTime.Now.Ticks;
@@ -1720,40 +1665,72 @@ namespace ZenergyBFSI.Model
 
             public async Task<bool> WaitForSignalAsync(CancellationToken token)
             {
-                // 边缘检测：仅当 TriggerLast=0 且 trigger=1 时返回 true
-                await Task.CompletedTask;
+                //var trigger = await _owner.GetInt_Plc($"PLC通道{_channelNo}分流触发");
+                //if (trigger <= 0) { _state.Processing = false; return false; }
+                //if (trigger == _state.TriggerLast) return false;
+                //_state.TriggerLast = trigger;
 
-                var trigger = _owner.GetInt_Plc($"PLC通道{_channelNo}分流触发");
-                if (trigger <= 0) { _state.Processing = false; return false; } // 无触发或超时
-                if (trigger == _state.TriggerLast) { return false; } // 电平未变，跳过
+                //// 状态锁存：防止重复执行
+                //if (_state.Processing) return false;
+                //_state.Processing = true;
+
+                //return true;
+
+                var trigger = await _owner.GetInt_Plc($"PLC通道{_channelNo}分流触发");
+
+                if (trigger <= 0)
+                {
+                    _state.Processing = false;
+                    await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 0);
+                    await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 0);
+                    this._state.TriggerLast = trigger;
+                    return false;
+                }
+                
+                //if (trigger == _state.TriggerLast)
+                //{
+                //    _state.TriggerLast = trigger;
+                //    return false;
+                //}
+
+
                 _state.TriggerLast = trigger;
 
                 // 状态锁存：防止重复执行
-                if (_state.Processing) { return false; }
+                if (_state.Processing) return false;
                 _state.Processing = true;
 
-                return true;
+                return trigger == 1;
             }
 
             public async Task ExecuteActionAsync(CancellationToken token)
             {
                 try
-                {
-                    var tempcode = _owner.GetString_Plc($"PLC通道{_channelNo}分流电芯码");
-                    if (string.IsNullOrEmpty(tempcode))
+                 {
+                    var code = await _owner.GetString_Plc($"PLC通道{_channelNo}分流电芯码");
+                    string tempcode = code?.Trim('\0') ?? "";
+                     tempcode = tempcode?.Replace("\0","") ?? "";
+                    if (string.IsNullOrEmpty(tempcode)&& tempcode.Length>=23)
                     {
-                        _owner.SetInt_Plc($"PLC通道{_channelNo}分流通道结果", 0);
+                        await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
+                        await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 2);
                         return;
                     }
-
-                    var t = SQLiteGenericHelper.QueryRaw<CellData>($"SELECT * from CellData WHERE 电芯码 = {tempcode}", "CellData");
-                    var data = t.FirstOrDefault(i => i.电芯码 == tempcode);
-
+                    
+                        var t = SQLiteGenericHelper.QueryRaw<CellData>($"SELECT * from CellData WHERE 电芯码 = '{@tempcode}'", "CellData");
+                        var data = t.FirstOrDefault(i => i.电芯码 == tempcode); 
                     if (data != null)
                     {
                         lock (_listDataLock)
                         {
-                            _owner.UpdateCellDataFromSQLserver(ref data);
+                            try
+                            {
+                                _owner.UpdateCellDataFromSQLserver(ref data);
+                            }catch(Exception ex)
+                            {
+
+                            }
+                            
                         }
 
                         int way = _owner.getlead(data);
@@ -1765,24 +1742,34 @@ namespace ZenergyBFSI.Model
                             case 3: data.视觉检测结果 = "结果三"; break;
                             case 4: data.视觉检测结果 = "结果四"; break;
                         }
-                        _owner.SetInt_Plc($"PLC通道{_channelNo}分流通道结果", way);
-
+                        if (data.出站结果 == "OK")
+                        {
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", way);
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", way);
+                        }
+                        else
+                        {
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 2);
+                        }
+    
                         var temp = new List<CellData> { data };
                         SQLiteGenericHelper.BulkUpsert<CellData>(temp, "电芯码", "CellData");
 
-                        string ngTypes = string.Join("|", new[]
-                        {
-                            data.Ng类型1, data.Ng类型2, data.Ng类型3, data.Ng类型4,
-                            data.Ng类型5, data.Ng类型6, data.Ng类型7, data.Ng类型8
-                        }.Where(s => !string.IsNullOrEmpty(s)));
-                        //DashboardService.I.RecordExit(tempcode, "NG", ngTypes);
+                        //string ngTypes = string.Join("|", new[]
+                        //{
+                        //    data.Ng类型1, data.Ng类型2, data.Ng类型3, data.Ng类型4,
+                        //    data.Ng类型5, data.Ng类型6, data.Ng类型7, data.Ng类型8
+                        //}.Where(s => !string.IsNullOrEmpty(s)));
+                        ////DashboardService.I.RecordExit(tempcode, "NG", ngTypes);
 
                         _state.LastCode = tempcode;
                         _state.LastProcessTime = DateTime.Now.Ticks;
                     }
                     else
                     {
-                        _owner.SetInt_Plc($"PLC通道{_channelNo}分流通道结果", 0);
+                        await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
+                        await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 2);
                     }
                 }
                 catch (Exception ex)
