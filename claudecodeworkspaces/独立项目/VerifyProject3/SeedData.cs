@@ -245,10 +245,9 @@ public static class SeedData
         new("BF-PATCH-005", "A面顶贴片无位移", "顶贴片 - A面顶贴片无位移", "顶贴片", "0", "0", "mm"),
     };
 
-    /// <summary>样本检测记录 — 模拟视觉检测结果</summary>
+    /// <summary>样本检测记录 — 模拟视觉检测结果（匹配当前表结构）</summary>
     public record struct SampleDataMOM(
-        string SideCellType, string CellCode, string DetectionArea,
-        string DetectionResults,
+        string SideCellType, string CellCode,
         string ParamterCode,   // → RecipeParam.ParameterID
         string ParameterDesc,  // → RecipeParam.Description
         string Value, string UpperLimit, string LowerLimit,
@@ -256,45 +255,45 @@ public static class SeedData
 
     /// <summary>
     /// 12条模拟检测结果，引用配方中的约束参数。
-    /// 对应 SK1745A 电芯 A面视觉检测，模拟 1个OK电芯 + 部分NG参数
+    /// SK1745A_001: 2条NG (防爆阀破损=1.5mm超限, 极柱划痕=0.35mm超限)，其余OK
     /// </summary>
     public static readonly List<SampleDataMOM> SampleMOMData = new()
     {
-        new("A面", "SK1745A_001", "Area1", "OK",
-            "BF-QR-001", "电芯顶盖 （刻码） - 二维码划伤，脏污影响扫码不允许",
+        new("A面", "SK1745A_001",
+            "BF-QR-001", "电芯顶盖（刻码）- 二维码划伤长度",
             "0", "0", "0", "0", "", "OK"),
-        new("A面", "SK1745A_001", "Area1", "OK",
-            "BF-QR-002", "电芯顶盖 （刻码） - A面二维码脏污直径",
+        new("A面", "SK1745A_001",
+            "BF-QR-002", "电芯顶盖（刻码）- 二维码脏污直径",
             "0", "0", "0", "0", "", "OK"),
-        new("A面", "SK1745A_001", "Area1", "OK",
-            "BF-VALVE-002", "电芯顶盖 （防爆阀） - 防爆阀PP膜翘起",
+        new("A面", "SK1745A_001",
+            "BF-VALVE-002", "电芯顶盖（防爆阀）- PP膜翘起高度",
             "0.1", "0", "0", "0", "mm", "OK"),
-        new("A面", "SK1745A_001", "Area1", "NG",
-            "BF-VALVE-003", "电芯顶盖 （防爆阀） - 防爆阀PP膜缺失",
+        new("A面", "SK1745A_001",
+            "BF-VALVE-003", "电芯顶盖（防爆阀）- PP膜破损面积直径",
             "1.5", "0", "0", "0", "mm", "NG"),
-        new("A面", "SK1745A_001", "Area1", "OK",
-            "BF-VALVE-005", "电芯顶盖 （防爆阀） - 防爆阀内电解液污染",
+        new("A面", "SK1745A_001",
+            "BF-VALVE-005", "电芯顶盖（防爆阀）- 电解液污染直径",
             "0", "0", "0", "0", "mm", "OK"),
-        new("A面", "SK1745A_001", "Area1", "OK",
-            "BF-POLE-003", "电芯顶盖 (极柱） - 极柱橡胶开裂",
+        new("A面", "SK1745A_001",
+            "BF-POLE-003", "电芯顶盖（极柱）- 橡胶开裂1长度",
             "0.3", "0", "0", "0", "mm", "OK"),
-        new("A面", "SK1745A_001", "Area1", "NG",
-            "BF-POLE-009", "电芯顶盖 (极柱） - 极柱划痕",
+        new("A面", "SK1745A_001",
+            "BF-POLE-009", "电芯顶盖（极柱）- 划痕凹陷深度",
             "0.35", "0.2", "0", "0.2", "mm", "NG"),
-        new("A面", "SK1745A_001", "Area1", "OK",
-            "BF-POLE-022", "电芯顶盖 (极柱） - 铝壳周边焊接凸起",
+        new("A面", "SK1745A_001",
+            "BF-POLE-022", "电芯顶盖（极柱）- 焊接凸起1长度",
             "0.1", "0.5", "0", "0.5", "mm", "OK"),
-        new("A面", "SK1745A_001", "Area1", "OK",
-            "BF-SURF-063", "电芯外观 - 包膜气泡（大面）",
+        new("A面", "SK1745A_001",
+            "BF-SURF-063", "电芯外观 - 包膜气泡1直径",
             "2.0", "5", "0", "5", "mm", "OK"),
-        new("A面", "SK1745A_001", "Area1", "OK",
-            "BF-SURF-082", "电芯外观 - 包膜褶皱（大面）",
+        new("A面", "SK1745A_001",
+            "BF-SURF-082", "电芯外观 - 包膜褶皱长度",
             "15.0", "80", "0", "80", "mm", "OK"),
-        new("A面", "SK1745A_001", "Area1", "OK",
-            "BF-PATCH-002", "顶贴片 - A面四角翘起高度",
+        new("A面", "SK1745A_001",
+            "BF-PATCH-002", "顶贴片 - 四角翘起高度",
             "0.5", "2", "0", "2", "mm", "OK"),
-        new("A面", "SK1745A_001", "Area1", "OK",
-            "BF-PATCH-004", "顶贴片 - A面铝钉凸起高度",
+        new("A面", "SK1745A_001",
+            "BF-PATCH-004", "顶贴片 - 铝钉凸起高度",
             "0.1", "0.3", "0", "0.3", "mm", "OK"),
     };
 }

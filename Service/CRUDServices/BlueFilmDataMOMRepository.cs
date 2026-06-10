@@ -7,24 +7,7 @@ using ZenergyBFSI.Model.Vision;
 
 namespace ZenergyBFSI.Service.CRUDServices
 {
-    #region T_BlueFilmDataMOM CRUD — 存储过程 + 直接 SQL 回退
-
-    // 存储过程 (2个):
-    //   PROC_Claude_InsertBlueFilmDataMOM
-    //     @SideCellType nvarchar(10), @CellCode nvarchar(50),
-    //     @DetectionArea nvarchar(10), @DetectionResults nvarchar(10),
-    //     @NGtypeNum int, @NGtype1 nvarchar(10), @NGtype2 nvarchar(10),
-    //     @NGtype3 nvarchar(10), @CreateTime datetime
-    //     注意: 无 @Reinvestment 参数!
-    //
-    //   PROC_Claude_GetBlueFilmDataMOM (分页, 返回中文列名, 不含 Num)
-    //     @pageIndex int, @pageSize int, @startTime datetime,
-    //     @endTime datetime, @CellCode nvarchar(50)
-    //     返回列: 电芯类型, 电芯条码, 检测区域, 检测结果,
-    //             NG类型数量, NG类型1, NG类型2, NG类型3, 创建时间
-    //     注意: T_BlueFilmDataMOM 无 Reinvestment 列, SP 也不返回此列
-    //
-    // GetByCellCode 优先走存储过程; 其他查询无对应 SP, 走直接 SQL
+    #region T_BlueFilmDataMOM CRUD — PROC_Claude_InsertBlueFilmDataMOM + 直接 SQL 回退
 
     public class BlueFilmDataMOMRepository
     {
@@ -46,12 +29,6 @@ namespace ZenergyBFSI.Service.CRUDServices
                 cmd.CommandType = CommandType.StoredProcedure;
                 cmd.Parameters.AddWithValue("@SideCellType", (object)model.SideCellType ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@CellCode", (object)model.CellCode ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@DetectionArea", (object)model.DetectionArea ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@DetectionResults", (object)model.DetectionResults ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@NGtypeNum", (object)model.NGtypeNum ?? 0);
-                cmd.Parameters.AddWithValue("@NGtype1", (object)model.NGtype1 ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@NGtype2", (object)model.NGtype2 ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@NGtype3", (object)model.NGtype3 ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@CreateTime", (object)model.CreateTime ?? DateTime.Now);
                 cmd.Parameters.AddWithValue("@ParamterCode", (object)model.ParamterCode ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@ParameterDesc", (object)model.ParameterDesc ?? DBNull.Value);
@@ -77,7 +54,7 @@ namespace ZenergyBFSI.Service.CRUDServices
 
         #endregion
 
-        #region Query — 全部直接 SQL
+        #region Query
 
         public List<T_BlueFilmDataMOM> GetAll()
         {
@@ -149,9 +126,6 @@ namespace ZenergyBFSI.Service.CRUDServices
             return ExecNonQuery(@"
                 UPDATE T_BlueFilmDataMOM SET
                     SideCellType = @SideCellType, CellCode = @CellCode,
-                    DetectionArea = @DetectionArea, DetectionResults = @DetectionResults,
-                    NGtypeNum = @NGtypeNum,
-                    NGtype1 = @NGtype1, NGtype2 = @NGtype2, NGtype3 = @NGtype3,
                     ParamterCode = @ParamterCode,
                     ParameterDesc = @ParameterDesc,
                     Value = @Value,
@@ -164,12 +138,6 @@ namespace ZenergyBFSI.Service.CRUDServices
                 new SqlParameter("@Num", (object)model.Num ?? 0),
                 new SqlParameter("@SideCellType", (object)model.SideCellType ?? DBNull.Value),
                 new SqlParameter("@CellCode", (object)model.CellCode ?? DBNull.Value),
-                new SqlParameter("@DetectionArea", (object)model.DetectionArea ?? DBNull.Value),
-                new SqlParameter("@DetectionResults", (object)model.DetectionResults ?? DBNull.Value),
-                new SqlParameter("@NGtypeNum", (object)model.NGtypeNum ?? 0),
-                new SqlParameter("@NGtype1", (object)model.NGtype1 ?? DBNull.Value),
-                new SqlParameter("@NGtype2", (object)model.NGtype2 ?? DBNull.Value),
-                new SqlParameter("@NGtype3", (object)model.NGtype3 ?? DBNull.Value),
                 new SqlParameter("@ParamterCode", (object)model.ParamterCode ?? DBNull.Value),
                 new SqlParameter("@ParameterDesc", (object)model.ParameterDesc ?? DBNull.Value),
                 new SqlParameter("@Value", (object)model.Value ?? DBNull.Value),
@@ -200,22 +168,15 @@ namespace ZenergyBFSI.Service.CRUDServices
 
         #region Mapping
 
-        // PROC_Claude_GetBlueFilmDataMOM 返回中文列名
         private List<T_BlueFilmDataMOM> MapFromChineseColumns(DataTable dt)
         {
             var list = new List<T_BlueFilmDataMOM>();
             foreach (DataRow row in dt.Rows)
                 list.Add(new T_BlueFilmDataMOM
                 {
-                    Num = null, // 存储过程不返回 Num
+                    Num = null,
                     SideCellType = Str(row, "电芯类型"),
                     CellCode = Str(row, "电芯条码"),
-                    DetectionArea = Str(row, "检测区域"),
-                    DetectionResults = Str(row, "检测结果"),
-                    NGtypeNum = Int(row, "NG类型数量"),
-                    NGtype1 = Str(row, "NG类型1"),
-                    NGtype2 = Str(row, "NG类型2"),
-                    NGtype3 = Str(row, "NG类型3"),
                     CreateTime = Dt(row, "创建时间"),
                     ParamterCode = Str(row, "工艺参数代码"),
                     ParameterDesc = Str(row, "参数描述"),
@@ -229,7 +190,6 @@ namespace ZenergyBFSI.Service.CRUDServices
             return list;
         }
 
-        // 直接 SQL (SELECT *) 返回英文列名
         private List<T_BlueFilmDataMOM> MapTable(DataTable dt)
         {
             var list = new List<T_BlueFilmDataMOM>();
@@ -239,12 +199,6 @@ namespace ZenergyBFSI.Service.CRUDServices
                     Num = Int(row, "Num"),
                     SideCellType = Str(row, "SideCellType"),
                     CellCode = Str(row, "CellCode"),
-                    DetectionArea = Str(row, "DetectionArea"),
-                    DetectionResults = Str(row, "DetectionResults"),
-                    NGtypeNum = Int(row, "NGtypeNum"),
-                    NGtype1 = Str(row, "NGtype1"),
-                    NGtype2 = Str(row, "NGtype2"),
-                    NGtype3 = Str(row, "NGtype3"),
                     CreateTime = Dt(row, "CreateTime"),
                     ParamterCode = Str(row, "ParamterCode"),
                     ParameterDesc = Str(row, "ParameterDesc"),

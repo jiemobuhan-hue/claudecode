@@ -4,21 +4,7 @@ using VerifyProject.Models;
 
 namespace VerifyProject.Repositories
 {
-    #region T_BlueFilmDataMOM CRUD
-
-    // 存储过程 (2个):
-    //   PROC_Claude_InsertBlueFilmDataMOM
-    //     @SideCellType nvarchar(10), @CellCode nvarchar(50),
-    //     @DetectionArea nvarchar(10), @DetectionResults nvarchar(10),
-    //     @NGtypeNum int, @NGtype1 nvarchar(10), @NGtype2 nvarchar(10),
-    //     @NGtype3 nvarchar(10), @CreateTime datetime
-    //     (注意: 无 @Reinvestment 参数!)
-    //
-    //   PROC_Claude_GetBlueFilmDataMOM (分页, 返回中文列名)
-    //     注意: 有 bug — COUNT 走 T_BlueFilmSide (不存在的表)
-    //     因此放弃使用此存储过程, 查询全部走直接 SQL
-    //
-    // 缺失: GetByNum / GetAll / GetByCellCode / GetCount / Update / Delete → 直接 SQL
+    #region T_BlueFilmDataMOM CRUD — PROC_Claude_InsertBlueFilmDataMOM + 直接 SQL
 
     public class BlueFilmDataMOMRepository
     {
@@ -29,7 +15,6 @@ namespace VerifyProject.Repositories
 
         public int? Insert(T_BlueFilmDataMOM m)
         {
-            // 注意: 无 @Reinvestment 参数
             using var conn = new SqlConnection(_conn);
             conn.Open();
             using (var cmd = new SqlCommand("PROC_Claude_InsertBlueFilmDataMOM", conn))
@@ -37,12 +22,6 @@ namespace VerifyProject.Repositories
                 cmd.CommandType = CommandType.StoredProcedure;
                 cmd.Parameters.AddWithValue("@SideCellType", (object)m.SideCellType ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@CellCode", (object)m.CellCode ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@DetectionArea", (object)m.DetectionArea ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@DetectionResults", (object)m.DetectionResults ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@NGtypeNum", (object)m.NGtypeNum ?? 0);
-                cmd.Parameters.AddWithValue("@NGtype1", (object)m.NGtype1 ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@NGtype2", (object)m.NGtype2 ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@NGtype3", (object)m.NGtype3 ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@CreateTime", (object)m.CreateTime ?? DateTime.Now);
                 cmd.Parameters.AddWithValue("@ParamterCode", (object)m.ParamterCode ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@ParameterDesc", (object)m.ParameterDesc ?? DBNull.Value);
@@ -63,7 +42,7 @@ namespace VerifyProject.Repositories
 
         #endregion
 
-        #region Query — 全部直接 SQL (分页存储过程有 bug)
+        #region Query
 
         public List<T_BlueFilmDataMOM> GetAll()
         {
@@ -102,9 +81,6 @@ namespace VerifyProject.Repositories
             return ExecNonQuery(@"
                 UPDATE T_BlueFilmDataMOM SET
                     SideCellType=@SideCellType, CellCode=@CellCode,
-                    DetectionArea=@DetectionArea, DetectionResults=@DetectionResults,
-                    NGtypeNum=@NGtypeNum,
-                    NGtype1=@NGtype1, NGtype2=@NGtype2, NGtype3=@NGtype3,
                     ParamterCode=@ParamterCode,
                     ParameterDesc=@ParameterDesc,
                     Value=@Value,
@@ -117,12 +93,6 @@ namespace VerifyProject.Repositories
                 new SqlParameter("@Num", (object)m.Num ?? 0),
                 new SqlParameter("@SideCellType", (object)m.SideCellType ?? DBNull.Value),
                 new SqlParameter("@CellCode", (object)m.CellCode ?? DBNull.Value),
-                new SqlParameter("@DetectionArea", (object)m.DetectionArea ?? DBNull.Value),
-                new SqlParameter("@DetectionResults", (object)m.DetectionResults ?? DBNull.Value),
-                new SqlParameter("@NGtypeNum", (object)m.NGtypeNum ?? 0),
-                new SqlParameter("@NGtype1", (object)m.NGtype1 ?? DBNull.Value),
-                new SqlParameter("@NGtype2", (object)m.NGtype2 ?? DBNull.Value),
-                new SqlParameter("@NGtype3", (object)m.NGtype3 ?? DBNull.Value),
                 new SqlParameter("@ParamterCode", (object)m.ParamterCode ?? DBNull.Value),
                 new SqlParameter("@ParameterDesc", (object)m.ParameterDesc ?? DBNull.Value),
                 new SqlParameter("@Value", (object)m.Value ?? DBNull.Value),
@@ -152,12 +122,6 @@ namespace VerifyProject.Repositories
                     Num = Int(row, "Num"),
                     SideCellType = Str(row, "SideCellType"),
                     CellCode = Str(row, "CellCode"),
-                    DetectionArea = Str(row, "DetectionArea"),
-                    DetectionResults = Str(row, "DetectionResults"),
-                    NGtypeNum = Int(row, "NGtypeNum"),
-                    NGtype1 = Str(row, "NGtype1"),
-                    NGtype2 = Str(row, "NGtype2"),
-                    NGtype3 = Str(row, "NGtype3"),
                     CreateTime = Dt(row, "CreateTime"),
                     ParamterCode = Str(row, "ParamterCode"),
                     ParameterDesc = Str(row, "ParameterDesc"),

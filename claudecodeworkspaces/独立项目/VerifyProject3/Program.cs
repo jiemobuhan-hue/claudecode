@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.SqlClient;
 using System.Text;
 using VerifyProject.Models;
@@ -7,354 +8,47 @@ using VerifyProject;
 Console.OutputEncoding = Encoding.UTF8;
 
 const string CONN = "Data Source=DESKTOP-0F9L4KO\\RJ;Initial Catalog=VisionProgram;User ID=merj;Password=1234@abcD;TrustServerCertificate=True";
-var tag = $"VERIFY_{DateTime.Now:yyyyMMddHHmmss}";
 int total = 0, passed = 0;
 
 Console.WriteLine("╔══════════════════════════════════════════╗");
-Console.WriteLine("║  VisionProgram 配方种子 + 样本数据写入   ║");
+Console.WriteLine("║  配方 + 检测数据 部署与验证              ║");
 Console.WriteLine("╚══════════════════════════════════════════╝");
 
-// ── 一次性 SQL 部署（初次运行取消注释） ──
-// RunSetup();
+// ── 1. 部署存储过程 ──
+DeployProcedures();
 
-// ── 写入配方 + 样本检测数据 ──
+// ── 2. 写入配方 ──
 SeedRecipes();
-SeedSampleMOMData();
 
-// ── 旧测试（后续使用，已注释） ──
-// Test_BlueFilmDetection();
-// Test_BlueFilmDataMOM();
-// Test_BlueFilmRecipeParameters();
+// ── 3. 写入样本检测数据 ──
+SeedSampleData();
 
-Console.WriteLine("\n  完成。");
+// ── 4. 验证 ──
+VerifyAll();
 
-#region T_BlueFilmDetection
+Console.WriteLine($"\n{'═',40}");
+Console.WriteLine($"  {passed}/{total} 通过");
+Console.WriteLine(passed == total ? "  全部通过" : $"  {total - passed} 项失败");
 
-void Test_BlueFilmDetection()
+#region 部署存储过程
+
+void DeployProcedures()
 {
-    Console.WriteLine("\n── T_BlueFilmDetection ──");
-    var repo = new BlueFilmDetectionRepository(CONN);
-    var code = $"{tag}_BFD";
-    int? num = null;
-
-    try
-    {
-        // [1] Insert
-        num = repo.Insert(new T_BlueFilmDetection
-        {
-            CellType = "TestType", CellCode = code, Reinvestment = 0,
-            DetectionArea = "Area1", DetectionResults = "OK",
-            NGtypeNum = 0, CreateTime = DateTime.Now
-        });
-        Pass("INSERT (sp) → Num", num != null, $"Num={num}");
-
-        // [2] GetByNum
-        if (num != null)
-        {
-            var r = repo.GetByNum(num.Value);
-            Pass("GetByNum", r != null && r.CellCode == code);
-        }
-        else Skip("GetByNum");
-
-        // [3] GetByCellCode (分页sp, 中文列名)
-        {
-            var list = repo.GetByCellCode(code);
-            Pass("GetByCellCode (sp)", list.Count > 0, $"{list.Count}条");
-        }
-
-        // [4] GetAll
-        {
-            var all = repo.GetAll();
-            Pass("GetAll", all.Count > 0, $"{all.Count}条");
-        }
-
-        // [5] Count
-        {
-            long n = repo.GetCount();
-            Pass("GetCount", n > 0, $"{n}条");
-        }
-
-        // [6] Update
-        if (num != null)
-        {
-            var r = repo.GetByNum(num.Value);
-            if (r != null)
-            {
-                r.DetectionResults = "NG"; r.NGtypeNum = 1; r.NGtype1 = "气泡";
-                int rows = repo.Update(r);
-                Pass("Update", rows > 0);
-                var u = repo.GetByNum(num.Value);
-                Pass("  验证 Update", u != null && u.DetectionResults == "NG");
-            }
-        }
-        else Skip("Update");
-
-        // [7] Delete
-        if (num != null)
-        {
-            int rows = repo.Delete(num.Value);
-            Pass("Delete", rows > 0);
-            var d = repo.GetByNum(num.Value);
-            Pass("  验证 Delete", d == null);
-        }
-        else Skip("Delete");
-    }
-    catch (Exception ex) { Fail(ex.Message); }
-
-    SafeCleanup("T_BlueFilmDetection", "CellCode", code);
-}
-
-#endregion
-
-#region T_BlueFilmDataMOM
-
-void Test_BlueFilmDataMOM()
-{
-    Console.WriteLine("\n── T_BlueFilmDataMOM ──");
-    var repo = new BlueFilmDataMOMRepository(CONN);
-    var code = $"{tag}_MOM";
-    int? num = null;
-
-    try
-    {
-        // [1] Insert (无 Reinvestment 参数)
-        num = repo.Insert(new T_BlueFilmDataMOM
-        {
-            SideCellType = "SideTest", CellCode = code,
-            DetectionArea = "Area1", DetectionResults = "OK",
-            NGtypeNum = 0, CreateTime = DateTime.Now,
-            ParamterCode = "VERIFY_CODE",
-            ParameterDesc = "验证缺陷#1-参数A",
-            Value = "3.2",
-            UpperLimit = "5.0",
-            LowerLomit = "0.5",
-            TargetValue = "2.0",
-            Unit = "mm",
-            ParameterResult = "OK"
-        });
-        Pass("INSERT (sp) → Num", num != null, $"Num={num}");
-
-        // 验证新列
-        if (num != null)
-        {
-            var inserted = repo.GetByNum(num.Value);
-            Pass("  新列 ParamterCode", inserted != null && inserted.ParamterCode == "VERIFY_CODE");
-            Pass("  新列 ParameterDesc", inserted != null && inserted.ParameterDesc == "验证缺陷#1-参数A");
-            Pass("  新列 Value", inserted != null && inserted.Value == "3.2");
-            Pass("  新列 Unit", inserted != null && inserted.Unit == "mm");
-            Pass("  新列 ParameterResult", inserted != null && inserted.ParameterResult == "OK");
-        }
-
-        // [2] GetByNum
-        if (num != null)
-        {
-            var r = repo.GetByNum(num.Value);
-            Pass("GetByNum", r != null && r.SideCellType == "SideTest");
-        }
-        else Skip("GetByNum");
-
-        // [3] GetByCellCode (直接SQL)
-        {
-            var list = repo.GetByCellCode(code);
-            Pass("GetByCellCode", list.Count > 0, $"{list.Count}条");
-        }
-
-        // [3.5] PROC_Claude_GetBlueFilmDataMOM
-        {
-            try
-            {
-                using var conn = new SqlConnection(CONN); conn.Open();
-                using var cmd = new SqlCommand("PROC_Claude_GetBlueFilmDataMOM", conn)
-                { CommandType = System.Data.CommandType.StoredProcedure };
-                cmd.Parameters.AddWithValue("@pageIndex", 1);
-                cmd.Parameters.AddWithValue("@pageSize", int.MaxValue);
-                cmd.Parameters.AddWithValue("@startTime", new DateTime(2000, 1, 1));
-                cmd.Parameters.AddWithValue("@endTime", new DateTime(2099, 12, 31));
-                cmd.Parameters.AddWithValue("@CellCode", code);
-                var ds = new System.Data.DataSet();
-                using var da = new SqlDataAdapter(cmd);
-                da.Fill(ds);
-                Pass("PROC_Claude_GetBlueFilmDataMOM (sp)", ds.Tables.Count >= 2,
-                    $"返回{ds.Tables.Count}个表 (总计/分页)");
-            }
-            catch (Exception ex)
-            {
-                Pass($"PROC_Claude_GetBlueFilmDataMOM (sp)", false, ex.Message);
-            }
-        }
-
-        // [4] GetAll
-        {
-            var all = repo.GetAll();
-            Pass("GetAll", all.Count > 0, $"{all.Count}条");
-        }
-
-        // [5] Count
-        {
-            long n = repo.GetCount();
-            Pass("GetCount", n > 0, $"{n}条");
-        }
-
-        // [6] Update
-        if (num != null)
-        {
-            var r = repo.GetByNum(num.Value);
-            if (r != null)
-            {
-                r.DetectionResults = "NG"; r.NGtypeNum = 2;
-                r.NGtype1 = "划伤"; r.NGtype2 = "气泡";
-                r.ParamterCode = "UPDATED_CODE";
-                r.ParameterDesc = "已更新描述";
-                r.Value = "8.1";
-                r.UpperLimit = "10.0";
-                r.LowerLomit = "0.1";
-                r.TargetValue = "5.0";
-                r.Unit = "μm";
-                r.ParameterResult = "NG";
-                int rows = repo.Update(r);
-                Pass("Update", rows > 0);
-                var u = repo.GetByNum(num.Value);
-                Pass("  验证 Update", u != null && u.DetectionResults == "NG");
-                Pass("  验证 ParamterCode 更新", u != null && u.ParamterCode == "UPDATED_CODE");
-                Pass("  验证 ParameterResult 更新", u != null && u.ParameterResult == "NG");
-            }
-        }
-        else Skip("Update");
-
-        // [7] Delete
-        //if (num != null)
-        //{
-        //    int rows = repo.Delete(num.Value);
-        //    Pass("Delete", rows > 0);
-        //    var d = repo.GetByNum(num.Value);
-        //    Pass("  验证 Delete", d == null);
-        //}
-        //else Skip("Delete");
-    }
-    catch (Exception ex) { Fail(ex.Message); }
-
-    //SafeCleanup("T_BlueFilmDataMOM", "CellCode", code);
-}
-
-#endregion
-
-#region T_BlueFilmRecipeParameters
-
-void Test_BlueFilmRecipeParameters()
-{
-    Console.WriteLine("\n── T_BlueFilmRecipeParameters ──");
-    var repo = new BlueFilmRecipeParametersRepository(CONN);
-    var pid = $"{tag}_PARAM";
-
-    try
-    {
-        // [1] Insert
-        int rows = repo.Insert(new T_BlueFilmRecipeParameters
-        {
-            ParameterID = pid, Description = "验证测试", Enable = 1,
-            ParameterName = "测试参数", ParameterType = "float",
-            UpperSpecificationsLimit = "100.0", LowerSpecificationsLimit = "10.0",
-            Unit = "ms", status = "启用", UpdateTime = DateTime.Now, ACK = 1
-        });
-        Pass("INSERT (sp)", rows > 0);
-
-        // [2] GetByParameterID
-        {
-            var r = repo.GetByParameterID(pid);
-            Pass("GetByParameterID (sp)", r != null && r.ParameterName == "测试参数");
-        }
-
-        // [3] GetAll
-        {
-            var all = repo.GetAll();
-            Pass("GetAll (sp)", all.Count > 0, $"{all.Count}条");
-        }
-
-        // [4] GetCount
-        {
-            long n = repo.GetCount();
-            Pass("GetCount (sp)", n > 0, $"{n}条");
-        }
-
-        // [5] Update
-        {
-            var r = repo.GetByParameterID(pid);
-            if (r != null)
-            {
-                r.Description = "已更新"; r.status = "禁用";
-                r.ParameterType = "int"; r.UpperSpecificationsLimit = "200.0";
-                int urows = repo.Update(r);
-                Pass("Update (sp)", urows > 0);
-                var u = repo.GetByParameterID(pid);
-                Pass("  验证 Update", u != null && u.status == "禁用");
-            }
-        }
-
-        // [6] Delete
-        {
-            int drows = repo.Delete(pid);
-            Pass("Delete (sp)", drows > 0);
-            var d = repo.GetByParameterID(pid);
-            Pass("  验证 Delete", d == null);
-        }
-    }
-    catch (Exception ex) { Fail(ex.Message); }
-
-    SafeCleanup("T_BlueFilmRecipeParameters", "ParameterID", pid);
-}
-
-#endregion
-
-#region SQL 一次性部署
-
-void RunSetup()
-{
-    Console.WriteLine("\n── SQL 部署: DDL + 存储过程 ──");
+    Console.WriteLine("\n── 部署存储过程 ──");
     using var conn = new SqlConnection(CONN); conn.Open();
 
-    // 1. ALTER TABLE: 追加 8 列（幂等）
-    Console.WriteLine("  [1/3] 检查列...");
-    var existingCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    using (var cmd = new SqlCommand(
-        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='T_BlueFilmDataMOM'", conn))
-    using (var r = cmd.ExecuteReader())
-        while (r.Read()) existingCols.Add(r.GetString(0));
-
-    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD ParamterCode   NVARCHAR(100) NULL",
-        existingCols, "ParamterCode");
-    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD ParameterDesc  NVARCHAR(200) NULL",
-        existingCols, "ParameterDesc");
-    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD Value          NVARCHAR(50)  NULL",
-        existingCols, "Value");
-    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD UpperLimit     NVARCHAR(50)  NULL",
-        existingCols, "UpperLimit");
-    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD LowerLomit     NVARCHAR(50)  NULL",
-        existingCols, "LowerLomit");
-    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD TargetValue    NVARCHAR(50)  NULL",
-        existingCols, "TargetValue");
-    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD Unit           NVARCHAR(20)  NULL",
-        existingCols, "Unit");
-    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD ParameterResult NVARCHAR(20) NULL",
-        existingCols, "ParameterResult");
-
-    // 2. 重建 PROC_Claude_InsertBlueFilmDataMOM
-    Console.WriteLine("  [2/3] 重建 PROC_Claude_InsertBlueFilmDataMOM...");
-    try
+    // 清理旧 SP（非 Claude 命名）
+    string[] oldSps = { "Proc_InsertBlueFilmDataMOM", "PROC_GetBlueFilmDataMOM", "Proc_InsertBlueFilmDetection", "Proc_InsertBlueFilmRecipeParameters" };
+    foreach (var sp in oldSps)
     {
-        using var check = new SqlCommand(
-            "IF OBJECT_ID('PROC_Claude_InsertBlueFilmDataMOM','P') IS NOT NULL DROP PROCEDURE PROC_Claude_InsertBlueFilmDataMOM", conn);
-        check.ExecuteNonQuery();
+        try { using var cmd = new SqlCommand($"IF OBJECT_ID('{sp}','P') IS NOT NULL DROP PROCEDURE {sp}", conn); cmd.ExecuteNonQuery(); } catch { }
+    }
 
-        using var create = new SqlCommand(@"
+    // 1) PROC_Claude_InsertBlueFilmDataMOM
+    TrySp(conn, "PROC_Claude_InsertBlueFilmDataMOM", @"
 CREATE PROCEDURE PROC_Claude_InsertBlueFilmDataMOM
     @SideCellType   NVARCHAR(10),
     @CellCode       NVARCHAR(50),
-    @DetectionArea  NVARCHAR(10),
-    @DetectionResults NVARCHAR(10),
-    @NGtypeNum      INT = 0,
-    @NGtype1        NVARCHAR(10) = NULL,
-    @NGtype2        NVARCHAR(10) = NULL,
-    @NGtype3        NVARCHAR(10) = NULL,
     @CreateTime     DATETIME,
     @ParamterCode   NVARCHAR(100) = NULL,
     @ParameterDesc  NVARCHAR(200) = NULL,
@@ -366,218 +60,219 @@ CREATE PROCEDURE PROC_Claude_InsertBlueFilmDataMOM
     @ParameterResult NVARCHAR(20) = NULL
 AS
 BEGIN
-    INSERT INTO T_BlueFilmDataMOM (
-        SideCellType, CellCode, DetectionArea, DetectionResults,
-        NGtypeNum, NGtype1, NGtype2, NGtype3, CreateTime,
-        ParamterCode, ParameterDesc, Value, UpperLimit, LowerLomit,
-        TargetValue, Unit, ParameterResult
-    ) VALUES (
-        @SideCellType, @CellCode, @DetectionArea, @DetectionResults,
-        @NGtypeNum, @NGtype1, @NGtype2, @NGtype3, @CreateTime,
-        @ParamterCode, @ParameterDesc, @Value, @UpperLimit, @LowerLomit,
-        @TargetValue, @Unit, @ParameterResult
-    );
-END
-", conn);
-        create.ExecuteNonQuery();
-        Console.WriteLine("  [OK] PROC_Claude_InsertBlueFilmDataMOM 已重建");
-    }
-    catch (Exception ex) { Console.WriteLine($"  [FAIL] {ex.Message}"); }
+    INSERT INTO T_BlueFilmDataMOM (SideCellType, CellCode, CreateTime,
+        ParamterCode, ParameterDesc, Value, UpperLimit, LowerLomit, TargetValue, Unit, ParameterResult)
+    VALUES (@SideCellType, @CellCode, @CreateTime,
+        @ParamterCode, @ParameterDesc, @Value, @UpperLimit, @LowerLomit, @TargetValue, @Unit, @ParameterResult);
+END");
 
-    // 3. 重建 PROC_Claude_GetBlueFilmDataMOM
-    Console.WriteLine("  [3/4] 重建 PROC_Claude_GetBlueFilmDataMOM...");
-    try
-    {
-        using var check = new SqlCommand(
-            "IF OBJECT_ID('PROC_Claude_GetBlueFilmDataMOM','P') IS NOT NULL DROP PROCEDURE PROC_Claude_GetBlueFilmDataMOM", conn);
-        check.ExecuteNonQuery();
-
-        using var create = new SqlCommand(@"
+    // 2) PROC_Claude_GetBlueFilmDataMOM
+    TrySp(conn, "PROC_Claude_GetBlueFilmDataMOM", @"
 CREATE PROCEDURE PROC_Claude_GetBlueFilmDataMOM
-    @pageIndex INT,
-    @pageSize  INT,
-    @startTime DATETIME,
-    @endTime   DATETIME,
-    @CellCode  NVARCHAR(50)
+    @pageIndex INT, @pageSize INT, @startTime DATETIME, @endTime DATETIME, @CellCode NVARCHAR(50)
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @startRow INT = (@pageIndex - 1) * @pageSize + 1;
     DECLARE @endRow   INT = @pageIndex * @pageSize;
 
-    SELECT
-        ROW_NUMBER() OVER (ORDER BY CreateTime DESC) AS RowNum,
-        SideCellType, CellCode, DetectionArea, DetectionResults,
-        NGtypeNum, NGtype1, NGtype2, NGtype3, CreateTime,
-        ParamterCode, ParameterDesc, Value,
-        UpperLimit, LowerLomit, TargetValue, Unit, ParameterResult
-    INTO #DataSource
-    FROM T_BlueFilmDataMOM
-    WHERE (@CellCode = 'ALL' OR CellCode = @CellCode)
-      AND CreateTime >= @startTime
-      AND CreateTime <= @endTime;
-
-    SELECT COUNT(*) AS TotalCount
+    SELECT ROW_NUMBER() OVER (ORDER BY CreateTime DESC) AS RowNum,
+        SideCellType, CellCode, CreateTime,
+        ParamterCode, ParameterDesc, Value, UpperLimit, LowerLomit, TargetValue, Unit, ParameterResult
+    INTO #DS
     FROM T_BlueFilmDataMOM
     WHERE (@CellCode = 'ALL' OR CellCode = @CellCode)
       AND CreateTime >= @startTime AND CreateTime <= @endTime;
 
-    SELECT
-        RowNum AS 序号,
-        SideCellType AS 电芯类型,
-        CellCode AS 电芯条码,
-        DetectionArea AS 检测区域,
-        DetectionResults AS 检测结果,
-        NGtypeNum AS NG类型数量,
-        NGtype1 AS NG类型1, NGtype2 AS NG类型2, NGtype3 AS NG类型3,
-        CreateTime AS 创建时间,
-        ParamterCode AS 工艺参数代码,
-        ParameterDesc AS 参数描述,
-        Value AS 测量值,
-        UpperLimit AS 上限,
-        LowerLomit AS 下限,
-        TargetValue AS 目标值,
-        Unit AS 单位,
-        ParameterResult AS 参数判定结果
-    FROM #DataSource
-    WHERE RowNum BETWEEN @startRow AND @endRow
-    ORDER BY RowNum;
+    SELECT COUNT(*) AS TotalCount FROM #DS;
 
-    DROP TABLE #DataSource;
-END
-", conn);
-        create.ExecuteNonQuery();
-        Console.WriteLine("  [OK] PROC_Claude_GetBlueFilmDataMOM 已重建");
-    }
-    catch (Exception ex) { Console.WriteLine($"  [FAIL] {ex.Message}"); }
+    SELECT RowNum AS 序号,
+        SideCellType AS 电芯类型, CellCode AS 电芯条码, CreateTime AS 创建时间,
+        ParamterCode AS 工艺参数代码, ParameterDesc AS 参数描述, Value AS 测量值,
+        UpperLimit AS 上限, LowerLomit AS 下限, TargetValue AS 目标值,
+        Unit AS 单位, ParameterResult AS 参数判定结果
+    FROM #DS
+    WHERE RowNum BETWEEN @startRow AND @endRow ORDER BY RowNum;
 
-    Console.WriteLine("  部署完成。\n");
+    DROP TABLE #DS;
+END");
+
+    // 3) PROC_Claude_InsertBlueFilmRecipeParameters
+    TrySp(conn, "PROC_Claude_InsertBlueFilmRecipeParameters", @"
+CREATE PROCEDURE PROC_Claude_InsertBlueFilmRecipeParameters
+    @ParameterID    NVARCHAR(100),
+    @ParameterName  NVARCHAR(200),
+    @Description    NVARCHAR(500),
+    @ParameterType  NVARCHAR(50)  = '',
+    @UpperSpecLimit NVARCHAR(50)  = '0',
+    @LowerSpecLimit NVARCHAR(50)  = '0',
+    @Unit           NVARCHAR(20)  = ''
+AS
+BEGIN
+    IF EXISTS (SELECT 1 FROM T_BlueFilmRecipeParameters WHERE ParameterID=@ParameterID)
+        UPDATE T_BlueFilmRecipeParameters SET
+            ParameterName=@ParameterName, Description=@Description, ParameterType=@ParameterType,
+            UpperSpecificationsLimit=@UpperSpecLimit, LowerSpecificationsLimit=@LowerSpecLimit,
+            Unit=@Unit, Enable=1, status=N'启用', UpdateTime=GETDATE()
+        WHERE ParameterID=@ParameterID;
+    ELSE
+        INSERT INTO T_BlueFilmRecipeParameters (ParameterID, ParameterName, Description, ParameterType,
+            UpperSpecificationsLimit, LowerSpecificationsLimit, Unit, Enable, status, UpdateTime)
+        VALUES (@ParameterID, @ParameterName, @Description, @ParameterType,
+            @UpperSpecLimit, @LowerSpecLimit, @Unit, 1, N'启用', GETDATE());
+END");
+
+    Console.WriteLine("  完成。");
 }
 
-void TryExec(SqlConnection conn, string sql, HashSet<string> existing, string colName)
+void TrySp(SqlConnection conn, string name, string body)
 {
-    if (existing.Contains(colName))
-    {
-        Console.WriteLine($"  [跳过] 列 {colName} 已存在");
-        return;
-    }
     try
     {
-        using var cmd = new SqlCommand(sql, conn);
-        cmd.ExecuteNonQuery();
-        Console.WriteLine($"  [OK] 添加列 {colName}");
+        using var drop = new SqlCommand($"IF OBJECT_ID('{name}','P') IS NOT NULL DROP PROCEDURE {name}", conn);
+        drop.ExecuteNonQuery();
+        using var create = new SqlCommand(body, conn);
+        create.ExecuteNonQuery();
+        Console.WriteLine($"  [OK] {name}");
     }
-    catch (Exception ex) { Console.WriteLine($"  [FAIL] 添加列 {colName}: {ex.Message}"); }
+    catch (Exception ex) { Console.WriteLine($"  [FAIL] {name}: {ex.Message}"); }
 }
 
 #endregion
 
-#region 种子数据写入
+#region 写入配方 T_BlueFilmRecipeParameters
 
 void SeedRecipes()
 {
-    Console.WriteLine("\n── 写入配方数据 → T_BlueFilmRecipeParameters ──");
+    Console.WriteLine("\n── 写入配方 T_BlueFilmRecipeParameters ──");
     try
     {
         using var conn = new SqlConnection(CONN); conn.Open();
-        int inserted = 0, updated = 0, skipped = 0;
-
+        int cnt = 0;
         foreach (var p in SeedData.BlueFilmRecipes)
         {
-            using var check = new SqlCommand(
-                "SELECT COUNT(*) FROM T_BlueFilmRecipeParameters WHERE ParameterID=@p0", conn);
-            check.Parameters.AddWithValue("@p0", p.ParameterID);
-            bool exists = (int)check.ExecuteScalar() > 0;
-
-            if (exists)
-            {
-                // 更新已有记录（覆盖初版约束）
-                using var upd = new SqlCommand(@"
-                    UPDATE T_BlueFilmRecipeParameters SET
-                        ParameterName=@name, Description=@desc, ParameterType=@type,
-                        UpperSpecificationsLimit=@upper, LowerSpecificationsLimit=@lower,
-                        Unit=@unit, Enable=1, status=N'启用', UpdateTime=GETDATE()
-                    WHERE ParameterID=@id", conn);
-                upd.Parameters.AddWithValue("@id", p.ParameterID);
-                upd.Parameters.AddWithValue("@name", p.ParameterName);
-                upd.Parameters.AddWithValue("@desc", p.Description);
-                upd.Parameters.AddWithValue("@type", p.ParameterType);
-                upd.Parameters.AddWithValue("@upper", p.UpperLimit);
-                upd.Parameters.AddWithValue("@lower", p.LowerLimit);
-                upd.Parameters.AddWithValue("@unit", (object)(string.IsNullOrEmpty(p.Unit) ? DBNull.Value : p.Unit));
-                upd.ExecuteNonQuery();
-                updated++;
-            }
-            else
-            {
-                using var ins = new SqlCommand(@"
-                    INSERT INTO T_BlueFilmRecipeParameters
-                        (ParameterID, ParameterName, Description, ParameterType,
-                         UpperSpecificationsLimit, LowerSpecificationsLimit,
-                         Unit, Enable, status, UpdateTime)
-                    VALUES
-                        (@id, @name, @desc, @type,
-                         @upper, @lower,
-                         @unit, 1, N'启用', GETDATE())", conn);
-                ins.Parameters.AddWithValue("@id", p.ParameterID);
-                ins.Parameters.AddWithValue("@name", p.ParameterName);
-                ins.Parameters.AddWithValue("@desc", p.Description);
-                ins.Parameters.AddWithValue("@type", p.ParameterType);
-                ins.Parameters.AddWithValue("@upper", p.UpperLimit);
-                ins.Parameters.AddWithValue("@lower", p.LowerLimit);
-                ins.Parameters.AddWithValue("@unit", (object)(string.IsNullOrEmpty(p.Unit) ? DBNull.Value : p.Unit));
-                ins.ExecuteNonQuery();
-                inserted++;
-            }
+            using var cmd = new SqlCommand("PROC_Claude_InsertBlueFilmRecipeParameters", conn)
+            { CommandType = CommandType.StoredProcedure };
+            cmd.Parameters.AddWithValue("@ParameterID", p.ParameterID);
+            cmd.Parameters.AddWithValue("@ParameterName", p.ParameterName);
+            cmd.Parameters.AddWithValue("@Description", p.Description);
+            cmd.Parameters.AddWithValue("@ParameterType", p.ParameterType);
+            cmd.Parameters.AddWithValue("@UpperSpecLimit", p.UpperLimit);
+            cmd.Parameters.AddWithValue("@LowerSpecLimit", p.LowerLimit);
+            cmd.Parameters.AddWithValue("@Unit", (object)(string.IsNullOrEmpty(p.Unit) ? DBNull.Value : p.Unit));
+            cmd.ExecuteNonQuery();
+            cnt++;
         }
-        Console.WriteLine($"  配方: {inserted} 条新增, {updated} 条更新, {skipped} 条跳过");
+        Console.WriteLine($"  [OK] {cnt} 条配方写入");
     }
     catch (Exception ex) { Console.WriteLine($"  [FAIL] {ex.Message}"); }
 }
 
-void SeedSampleMOMData()
+#endregion
+
+#region 写入样本检测数据 T_BlueFilmDataMOM
+
+void SeedSampleData()
 {
-    Console.WriteLine("\n── 写入样本检测数据 → T_BlueFilmDataMOM ──");
+    Console.WriteLine("\n── 写入样本检测数据 T_BlueFilmDataMOM ──");
     try
     {
         using var conn = new SqlConnection(CONN); conn.Open();
+        using var del = new SqlCommand("DELETE FROM T_BlueFilmDataMOM WHERE CellCode LIKE 'SAMPLE%'", conn);
+        del.ExecuteNonQuery();
 
-        // 清理旧样本
-        using var del = new SqlCommand(
-            "DELETE FROM T_BlueFilmDataMOM WHERE CellCode LIKE 'SAMPLE%'", conn);
-        int delCnt = del.ExecuteNonQuery();
-        if (delCnt > 0) Console.WriteLine($"  清理旧样本: {delCnt} 条");
-
-        int ok = 0, ng = 0;
+        var repo = new BlueFilmDataMOMRepository(CONN);
         foreach (var d in SeedData.SampleMOMData)
         {
-            using var cmd = new SqlCommand("PROC_Claude_InsertBlueFilmDataMOM", conn)
-            { CommandType = System.Data.CommandType.StoredProcedure };
-            cmd.Parameters.AddWithValue("@SideCellType", d.SideCellType);
-            cmd.Parameters.AddWithValue("@CellCode", d.CellCode);
-            cmd.Parameters.AddWithValue("@DetectionArea", d.DetectionArea);
-            cmd.Parameters.AddWithValue("@DetectionResults", d.DetectionResults);
-            cmd.Parameters.AddWithValue("@NGtypeNum", 0);
-            cmd.Parameters.AddWithValue("@NGtype1", DBNull.Value);
-            cmd.Parameters.AddWithValue("@NGtype2", DBNull.Value);
-            cmd.Parameters.AddWithValue("@NGtype3", DBNull.Value);
-            cmd.Parameters.AddWithValue("@CreateTime", DateTime.Now);
-            cmd.Parameters.AddWithValue("@ParamterCode", d.ParamterCode);
-            cmd.Parameters.AddWithValue("@ParameterDesc", d.ParameterDesc);
-            cmd.Parameters.AddWithValue("@Value", d.Value);
-            cmd.Parameters.AddWithValue("@UpperLimit", d.UpperLimit);
-            cmd.Parameters.AddWithValue("@LowerLomit", d.LowerLimit);
-            cmd.Parameters.AddWithValue("@TargetValue", d.TargetValue);
-            cmd.Parameters.AddWithValue("@Unit", (object)(string.IsNullOrEmpty(d.Unit) ? DBNull.Value : d.Unit));
-            cmd.Parameters.AddWithValue("@ParameterResult", d.ParameterResult);
-            cmd.ExecuteNonQuery();
-
-            if (d.ParameterResult == "OK") ok++; else ng++;
+            repo.Insert(new T_BlueFilmDataMOM
+            {
+                SideCellType = d.SideCellType,
+                CellCode = d.CellCode,
+                CreateTime = DateTime.Now,
+                ParamterCode = d.ParamterCode,
+                ParameterDesc = d.ParameterDesc,
+                Value = d.Value,
+                UpperLimit = d.UpperLimit,
+                LowerLomit = d.LowerLimit,
+                TargetValue = d.TargetValue,
+                Unit = d.Unit,
+                ParameterResult = d.ParameterResult
+            });
         }
-
-        Console.WriteLine($"  样本数据: 12 条 (OK:{ok} NG:{ng}) → CellCode=SAMPLE_001");
+        Console.WriteLine($"  [OK] {SeedData.SampleMOMData.Count} 条样本写入 (OK/NG 混合)");
     }
     catch (Exception ex) { Console.WriteLine($"  [FAIL] {ex.Message}"); }
+}
+
+#endregion
+
+#region 验证
+
+void VerifyAll()
+{
+    Console.WriteLine("\n── 验证 ──");
+    VerifyRecipeCount();
+    VerifyMOMInsert();
+    VerifyMOMQuery();
+}
+
+void VerifyRecipeCount()
+{
+    try
+    {
+        using var conn = new SqlConnection(CONN); conn.Open();
+        using var cmd = new SqlCommand("SELECT COUNT(*) FROM T_BlueFilmRecipeParameters WHERE ParameterID LIKE 'BF-%'", conn);
+        long n = (int)cmd.ExecuteScalar();
+        Pass("T_BlueFilmRecipeParameters 配方数", n >= 200, $"{n} 条 (期望≥200)");
+    }
+    catch (Exception ex) { Fail($"配方查询: {ex.Message}"); }
+}
+
+void VerifyMOMInsert()
+{
+    try
+    {
+        var repo = new BlueFilmDataMOMRepository(CONN);
+        var code = $"SAMPLE_VERIFY_{DateTime.Now:HHmmss}";
+        var num = repo.Insert(new T_BlueFilmDataMOM
+        {
+            SideCellType = "A面", CellCode = code,
+            CreateTime = DateTime.Now,
+            ParamterCode = "BF-QR-001",
+            ParameterDesc = "验证-二维码划伤长度",
+            Value = "0", UpperLimit = "0", LowerLomit = "0",
+            TargetValue = "0", Unit = "", ParameterResult = "OK"
+        });
+        Pass("INSERT → Num", num != null, $"Num={num}");
+
+        var r = repo.GetByNum(num!.Value);
+        Pass("GetByNum", r != null && r.ParamterCode == "BF-QR-001");
+        Pass("  新列 ParameterDesc", r != null && r.ParameterDesc == "验证-二维码划伤长度");
+
+        repo.Delete(num.Value);
+        Pass("Delete", repo.GetByNum(num.Value) == null);
+    }
+    catch (Exception ex) { Fail($"MOM CRUD: {ex.Message}"); }
+}
+
+void VerifyMOMQuery()
+{
+    try
+    {
+        using var conn = new SqlConnection(CONN); conn.Open();
+        using var cmd = new SqlCommand("PROC_Claude_GetBlueFilmDataMOM", conn)
+        { CommandType = CommandType.StoredProcedure };
+        cmd.Parameters.AddWithValue("@pageIndex", 1);
+        cmd.Parameters.AddWithValue("@pageSize", 10);
+        cmd.Parameters.AddWithValue("@startTime", new DateTime(2000, 1, 1));
+        cmd.Parameters.AddWithValue("@endTime", new DateTime(2099, 12, 31));
+        cmd.Parameters.AddWithValue("@CellCode", "SAMPLE_001");
+        var ds = new DataSet();
+        using var da = new SqlDataAdapter(cmd);
+        da.Fill(ds);
+        Pass("PROC_Claude_GetBlueFilmDataMOM (2表)", ds.Tables.Count >= 2, $"返回{ds.Tables.Count}个表");
+    }
+    catch (Exception ex) { Pass($"PROC_Claude_GetBlueFilmDataMOM", false, ex.Message); }
 }
 
 #endregion
@@ -591,21 +286,6 @@ void Pass(string op, bool ok, string detail = "")
     Console.WriteLine($"  [{(ok ? "PASS" : "FAIL")}] {op}{(string.IsNullOrEmpty(detail) ? "" : $"  ({detail})")}");
 }
 
-void Skip(string op) => Console.WriteLine($"  [SKIP] {op}  — Num=null");
-
 void Fail(string err) { total++; Console.WriteLine($"  [FAIL] {err}"); }
-
-void SafeCleanup(string table, string col, string val)
-{
-    try
-    {
-        using var conn = new SqlConnection(CONN); conn.Open();
-        using var cmd = new SqlCommand($"DELETE FROM [{table}] WHERE [{col}]=@v", conn);
-        cmd.Parameters.AddWithValue("@v", val);
-        int n = cmd.ExecuteNonQuery();
-        if (n > 0) Console.WriteLine($"  [清理] {table}: {n}条");
-    }
-    catch (Exception ex) { Console.WriteLine($"  [清理] {table}: {ex.Message}"); }
-}
 
 #endregion
