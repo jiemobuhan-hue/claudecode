@@ -307,158 +307,160 @@ void Test_BlueFilmRecipeParameters()
 void RunSetup()
 {
     Console.WriteLine("\n── SQL 部署: DDL + 存储过程 ──");
+    using var conn = new SqlConnection(CONN); conn.Open();
+
+    // 1. ALTER TABLE: 追加 8 列（幂等）
+    Console.WriteLine("  [1/3] 检查列...");
+    var existingCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    using (var cmd = new SqlCommand(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='T_BlueFilmDataMOM'", conn))
+    using (var r = cmd.ExecuteReader())
+        while (r.Read()) existingCols.Add(r.GetString(0));
+
+    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD ParamterCode   NVARCHAR(100) NULL",
+        existingCols, "ParamterCode");
+    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD ParameterDesc  NVARCHAR(200) NULL",
+        existingCols, "ParameterDesc");
+    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD Value          NVARCHAR(50)  NULL",
+        existingCols, "Value");
+    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD UpperLimit     NVARCHAR(50)  NULL",
+        existingCols, "UpperLimit");
+    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD LowerLomit     NVARCHAR(50)  NULL",
+        existingCols, "LowerLomit");
+    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD TargetValue    NVARCHAR(50)  NULL",
+        existingCols, "TargetValue");
+    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD Unit           NVARCHAR(20)  NULL",
+        existingCols, "Unit");
+    TryExec(conn, "ALTER TABLE T_BlueFilmDataMOM ADD ParameterResult NVARCHAR(20) NULL",
+        existingCols, "ParameterResult");
+
+    // 2. 重建 Proc_InsertBlueFilmDataMOM
+    Console.WriteLine("  [2/3] 重建 Proc_InsertBlueFilmDataMOM...");
     try
     {
-        using var conn = new SqlConnection(CONN); conn.Open();
+        using var drop = new SqlCommand(
+            "DROP PROCEDURE IF EXISTS Proc_InsertBlueFilmDataMOM", conn);
+        drop.ExecuteNonQuery();
 
-        // 1. ALTER TABLE: 追加 8 列（先查 INFORMATION_SCHEMA 避免重复添加报错）
-        var existingCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        using (var cmd = new SqlCommand(
-            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='T_BlueFilmDataMOM'", conn))
-        using (var r = cmd.ExecuteReader())
-            while (r.Read()) existingCols.Add(r.GetString(0));
-
-        var newCols = new (string Name, string Type)[]
-        {
-            ("ParamterCode",   "NVARCHAR(100) NULL"),
-            ("ParameterDesc",  "NVARCHAR(200) NULL"),
-            ("Value",          "NVARCHAR(50)  NULL"),
-            ("UpperLimit",     "NVARCHAR(50)  NULL"),
-            ("LowerLomit",     "NVARCHAR(50)  NULL"),
-            ("TargetValue",    "NVARCHAR(50)  NULL"),
-            ("Unit",           "NVARCHAR(20)  NULL"),
-            ("ParameterResult","NVARCHAR(20)  NULL"),
-        };
-
-        foreach (var (name, type) in newCols)
-        {
-            if (existingCols.Contains(name))
-            {
-                Console.WriteLine($"  [跳过] 列 {name} 已存在");
-                continue;
-            }
-            using var cmd = new SqlCommand(
-                $"ALTER TABLE T_BlueFilmDataMOM ADD {name} {type}", conn);
-            cmd.ExecuteNonQuery();
-            Console.WriteLine($"  [OK] 添加列 {name}");
-        }
-
-        // 2. ALTER PROCEDURE: Proc_InsertBlueFilmDataMOM
-        using (var cmd = new SqlCommand(@"
-IF OBJECT_ID('Proc_InsertBlueFilmDataMOM','P') IS NOT NULL
-    EXEC sp_executesql N'
-        DROP PROCEDURE Proc_InsertBlueFilmDataMOM;
-        EXEC(''CREATE PROCEDURE Proc_InsertBlueFilmDataMOM
-            @SideCellType   NVARCHAR(10),
-            @CellCode       NVARCHAR(50),
-            @DetectionArea  NVARCHAR(10),
-            @DetectionResults NVARCHAR(10),
-            @NGtypeNum      INT,
-            @NGtype1        NVARCHAR(10),
-            @NGtype2        NVARCHAR(10),
-            @NGtype3        NVARCHAR(10),
-            @CreateTime     DATETIME,
-            @ParamterCode   NVARCHAR(100) = NULL,
-            @ParameterDesc  NVARCHAR(200) = NULL,
-            @Value          NVARCHAR(50)  = NULL,
-            @UpperLimit     NVARCHAR(50)  = NULL,
-            @LowerLomit     NVARCHAR(50)  = NULL,
-            @TargetValue    NVARCHAR(50)  = NULL,
-            @Unit           NVARCHAR(20)  = NULL,
-            @ParameterResult NVARCHAR(20) = NULL
-        AS
-        BEGIN
-            INSERT INTO T_BlueFilmDataMOM (
-                SideCellType, CellCode, DetectionArea, DetectionResults,
-                NGtypeNum, NGtype1, NGtype2, NGtype3, CreateTime,
-                ParamterCode, ParameterDesc, Value, UpperLimit, LowerLomit,
-                TargetValue, Unit, ParameterResult
-            ) VALUES (
-                @SideCellType, @CellCode, @DetectionArea, @DetectionResults,
-                @NGtypeNum, @NGtype1, @NGtype2, @NGtype3, @CreateTime,
-                @ParamterCode, @ParameterDesc, @Value, @UpperLimit, @LowerLomit,
-                @TargetValue, @Unit, @ParameterResult
-            );
-        END'');
-    '", conn))
-        {
-            cmd.ExecuteNonQuery();
-            Console.WriteLine("  [OK] Proc_InsertBlueFilmDataMOM 已更新（新增8参数）");
-        }
-
-        // 3. ALTER PROCEDURE: PROC_GetBlueFilmDataMOM — 追加8列中文别名
-        using (var cmd = new SqlCommand(@"
-IF OBJECT_ID('PROC_GetBlueFilmDataMOM','P') IS NOT NULL
-    EXEC sp_executesql N'
-        DROP PROCEDURE PROC_GetBlueFilmDataMOM;
-        EXEC(''CREATE PROCEDURE PROC_GetBlueFilmDataMOM
-            @pageIndex INT,
-            @pageSize  INT,
-            @startTime DATETIME,
-            @endTime   DATETIME,
-            @CellCode  NVARCHAR(50)
-        AS
-        BEGIN
-            SET NOCOUNT ON;
-
-            DECLARE @startRow INT = (@pageIndex - 1) * @pageSize + 1;
-            DECLARE @endRow   INT = @pageIndex * @pageSize;
-
-            ;WITH DataSource AS (
-                SELECT
-                    ROW_NUMBER() OVER (ORDER BY CreateTime DESC) AS RowNum,
-                    SideCellType,
-                    CellCode,
-                    DetectionArea,
-                    DetectionResults,
-                    NGtypeNum,
-                    NGtype1, NGtype2, NGtype3,
-                    CreateTime,
-                    ParamterCode, ParameterDesc, Value,
-                    UpperLimit, LowerLomit, TargetValue, Unit, ParameterResult
-                FROM T_BlueFilmDataMOM
-                WHERE (@CellCode = ''''ALL'''' OR CellCode = @CellCode)
-                  AND CreateTime >= @startTime
-                  AND CreateTime <= @endTime
-            )
-            SELECT
-                (SELECT COUNT(*) FROM T_BlueFilmDataMOM
-                 WHERE (@CellCode = ''''ALL'''' OR CellCode = @CellCode)
-                   AND CreateTime >= @startTime AND CreateTime <= @endTime) AS TotalCount,
-
-                RowNum AS 序号,
-                SideCellType AS 电芯类型,
-                CellCode AS 电芯条码,
-                DetectionArea AS 检测区域,
-                DetectionResults AS 检测结果,
-                NGtypeNum AS NG类型数量,
-                NGtype1 AS NG类型1, NGtype2 AS NG类型2, NGtype3 AS NG类型3,
-                CreateTime AS 创建时间,
-                ParamterCode AS 工艺参数代码,
-                ParameterDesc AS 参数描述,
-                Value AS 测量值,
-                UpperLimit AS 上限,
-                LowerLomit AS 下限,
-                TargetValue AS 目标值,
-                Unit AS 单位,
-                ParameterResult AS 参数判定结果
-            FROM DataSource
-            WHERE RowNum BETWEEN @startRow AND @endRow
-            ORDER BY RowNum;
-        END'');
-    '", conn))
-        {
-            cmd.ExecuteNonQuery();
-            Console.WriteLine("  [OK] PROC_GetBlueFilmDataMOM 已更新（追加8列中文别名）");
-        }
-
-        Console.WriteLine("  部署完成。\n");
+        using var create = new SqlCommand(@"
+CREATE PROCEDURE Proc_InsertBlueFilmDataMOM
+    @SideCellType   NVARCHAR(10),
+    @CellCode       NVARCHAR(50),
+    @DetectionArea  NVARCHAR(10),
+    @DetectionResults NVARCHAR(10),
+    @NGtypeNum      INT,
+    @NGtype1        NVARCHAR(10) = NULL,
+    @NGtype2        NVARCHAR(10) = NULL,
+    @NGtype3        NVARCHAR(10) = NULL,
+    @CreateTime     DATETIME,
+    @ParamterCode   NVARCHAR(100) = NULL,
+    @ParameterDesc  NVARCHAR(200) = NULL,
+    @Value          NVARCHAR(50)  = NULL,
+    @UpperLimit     NVARCHAR(50)  = NULL,
+    @LowerLomit     NVARCHAR(50)  = NULL,
+    @TargetValue    NVARCHAR(50)  = NULL,
+    @Unit           NVARCHAR(20)  = NULL,
+    @ParameterResult NVARCHAR(20) = NULL
+AS
+BEGIN
+    INSERT INTO T_BlueFilmDataMOM (
+        SideCellType, CellCode, DetectionArea, DetectionResults,
+        NGtypeNum, NGtype1, NGtype2, NGtype3, CreateTime,
+        ParamterCode, ParameterDesc, Value, UpperLimit, LowerLomit,
+        TargetValue, Unit, ParameterResult
+    ) VALUES (
+        @SideCellType, @CellCode, @DetectionArea, @DetectionResults,
+        @NGtypeNum, @NGtype1, @NGtype2, @NGtype3, @CreateTime,
+        @ParamterCode, @ParameterDesc, @Value, @UpperLimit, @LowerLomit,
+        @TargetValue, @Unit, @ParameterResult
+    );
+END
+", conn);
+        create.ExecuteNonQuery();
+        Console.WriteLine("  [OK] Proc_InsertBlueFilmDataMOM 已重建");
     }
-    catch (Exception ex)
+    catch (Exception ex) { Console.WriteLine($"  [FAIL] {ex.Message}"); }
+
+    // 3. 重建 PROC_GetBlueFilmDataMOM
+    Console.WriteLine("  [3/3] 重建 PROC_GetBlueFilmDataMOM...");
+    try
     {
-        Console.WriteLine($"  [部署失败] {ex.Message}");
-        Console.WriteLine("  请检查 SQL Server 连接和权限。\n");
+        using var drop = new SqlCommand(
+            "DROP PROCEDURE IF EXISTS PROC_GetBlueFilmDataMOM", conn);
+        drop.ExecuteNonQuery();
+
+        using var create = new SqlCommand(@"
+CREATE PROCEDURE PROC_GetBlueFilmDataMOM
+    @pageIndex INT,
+    @pageSize  INT,
+    @startTime DATETIME,
+    @endTime   DATETIME,
+    @CellCode  NVARCHAR(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @startRow INT = (@pageIndex - 1) * @pageSize + 1;
+    DECLARE @endRow   INT = @pageIndex * @pageSize;
+
+    ;WITH DataSource AS (
+        SELECT
+            ROW_NUMBER() OVER (ORDER BY CreateTime DESC) AS RowNum,
+            SideCellType, CellCode, DetectionArea, DetectionResults,
+            NGtypeNum, NGtype1, NGtype2, NGtype3, CreateTime,
+            ParamterCode, ParameterDesc, Value,
+            UpperLimit, LowerLomit, TargetValue, Unit, ParameterResult
+        FROM T_BlueFilmDataMOM
+        WHERE (@CellCode = 'ALL' OR CellCode = @CellCode)
+          AND CreateTime >= @startTime
+          AND CreateTime <= @endTime
+    )
+    SELECT
+        (SELECT COUNT(*) FROM T_BlueFilmDataMOM
+         WHERE (@CellCode = 'ALL' OR CellCode = @CellCode)
+           AND CreateTime >= @startTime AND CreateTime <= @endTime) AS TotalCount,
+        RowNum AS 序号,
+        SideCellType AS 电芯类型,
+        CellCode AS 电芯条码,
+        DetectionArea AS 检测区域,
+        DetectionResults AS 检测结果,
+        NGtypeNum AS NG类型数量,
+        NGtype1 AS NG类型1, NGtype2 AS NG类型2, NGtype3 AS NG类型3,
+        CreateTime AS 创建时间,
+        ParamterCode AS 工艺参数代码,
+        ParameterDesc AS 参数描述,
+        Value AS 测量值,
+        UpperLimit AS 上限,
+        LowerLomit AS 下限,
+        TargetValue AS 目标值,
+        Unit AS 单位,
+        ParameterResult AS 参数判定结果
+    FROM DataSource
+    WHERE RowNum BETWEEN @startRow AND @endRow
+    ORDER BY RowNum;
+END
+", conn);
+        create.ExecuteNonQuery();
+        Console.WriteLine("  [OK] PROC_GetBlueFilmDataMOM 已重建");
     }
+    catch (Exception ex) { Console.WriteLine($"  [FAIL] {ex.Message}"); }
+
+    Console.WriteLine("  部署完成。\n");
+}
+
+void TryExec(SqlConnection conn, string sql, HashSet<string> existing, string colName)
+{
+    if (existing.Contains(colName))
+    {
+        Console.WriteLine($"  [跳过] 列 {colName} 已存在");
+        return;
+    }
+    try
+    {
+        using var cmd = new SqlCommand(sql, conn);
+        cmd.ExecuteNonQuery();
+        Console.WriteLine($"  [OK] 添加列 {colName}");
+    }
+    catch (Exception ex) { Console.WriteLine($"  [FAIL] 添加列 {colName}: {ex.Message}"); }
 }
 
 #endregion
