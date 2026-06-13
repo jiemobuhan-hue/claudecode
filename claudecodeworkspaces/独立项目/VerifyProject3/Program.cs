@@ -7,7 +7,12 @@ using VerifyProject;
 
 Console.OutputEncoding = Encoding.UTF8;
 
-const string CONN = "Data Source=DESKTOP-0F9L4KO\\RJ;Initial Catalog=VisionProgram;User ID=merj;Password=1234@abcD;TrustServerCertificate=True";
+// 本地开发机
+const string CONN_LOCAL = "Data Source=DESKTOP-0F9L4KO\\RJ;Initial Catalog=VisionProgram;User ID=merj;Password=1234@abcD;TrustServerCertificate=True";
+// 局域网旧数据库 NHDST87
+const string CONN_REMOTE = "Data Source=NHDST87;Initial Catalog=VisionProgram;User ID=merj;Password=1234@abcD;TrustServerCertificate=True";
+
+const string CONN = CONN_LOCAL;  // ← 切换服务器改这里
 int total = 0, passed = 0;
 
 Console.WriteLine("╔══════════════════════════════════════════╗");
