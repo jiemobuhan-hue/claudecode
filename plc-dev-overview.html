@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>/plc-dev — 上位机 PLC 开发工具包</title>
+<style>
+  @font-face {
+    font-family: 'JetBrains Mono';
+    src: local('JetBrains Mono'), local('JetBrainsMono'), local('Consolas'), local('monospace');
+    font-weight: 300 700;
+  }
+
+  :root {
+    --bg-deep: #0a0e14;
+    --bg-panel: #11171f;
+    --bg-card: #161c26;
+    --border: #1e2a3a;
+    --border-active: #2a3a50;
+    --text-dim: #5a6a82;
+    --text-body: #8899b4;
+    --text-bright: #c8d6e5;
+    --amber: #d4911e;
+    --amber-glow: rgba(212, 145, 30, 0.30);
+    --green: #1ea672;
+    --green-glow: rgba(30, 166, 114, 0.30);
+    --red: #d94a4a;
+    --red-glow: rgba(217, 74, 74, 0.25);
+    --blue: #3b82c4;
+    --blue-glow: rgba(59, 130, 196, 0.25);
+    --purple: #7c5ce7;
+    --orange: #d97a2b;
+    --cyan: #2aa8b0;
+    --scanline: rgba(255,255,255,0.012);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-deep);
+    color: var(--text-body);
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Scanline overlay ─────────────────────────────── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      var(--scanline) 2px,
+      var(--scanline) 4px
+    );
+  }
+
+  /* ── Grid pattern ─────────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+      linear-gradient(rgba(30,42,58,0.15) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30,42,58,0.15) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 20%, transparent 70%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 20%, transparent 70%);
+  }
+
+  /* ── Layout ───────────────────────────────────────── */
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 60px 32px 80px;
+  }
+
+  /* ── Top bar / status strip ───────────────────────── */
+  .status-strip {
+    display: flex;
+    gap: 28px;
+    padding: 10px 18px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 40px;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+  .status-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    position: relative;
+  }
+  .status-dot.green { background: var(--green); box-shadow: 0 0 8px var(--green-glow); }
+  .status-dot.amber { background: var(--amber); box-shadow: 0 0 8px var(--amber-glow); }
+  .status-dot.pulse { animation: pulse 2s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  /* ── Hero ──────────────────────────────────────────── */
+  .hero {
+    margin-bottom: 56px;
+  }
+  .hero-badge {
+    display: inline-block;
+    background: var(--bg-card);
+    border: 1px solid var(--amber);
+    color: var(--amber);
+    padding: 4px 14px;
+    border-radius: 3px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: 52px;
+    font-weight: 700;
+    color: var(--text-bright);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin-bottom: 12px;
+  }
+  .hero h1 .slash { color: var(--amber); }
+  .hero h1 .cmd { color: var(--blue); }
+  .hero .subtitle {
+    font-size: 15px;
+    color: var(--text-dim);
+    max-width: 580px;
+    line-height: 1.7;
+  }
+
+  /* ── Pipeline visual ───────────────────────────────── */
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 56px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 28px 20px;
+    overflow-x: auto;
+  }
+  .pipe-step {
+    flex: 1;
+    min-width: 100px;
+    text-align: center;
+    position: relative;
+  }
+  .pipe-step .num {
+    display: inline-block;
+    width: 36px; height: 36px;
+    line-height: 36px;
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .pipe-step:nth-child(1) .num { background: rgba(217,74,74,0.18); color: var(--red); }
+  .pipe-step:nth-child(3) .num { background: rgba(212,145,30,0.18); color: var(--amber); }
+  .pipe-step:nth-child(5) .num { background: rgba(59,130,196,0.18); color: var(--blue); }
+  .pipe-step:nth-child(7) .num { background: rgba(30,166,114,0.18); color: var(--green); }
+  .pipe-step:nth-child(9) .num { background: rgba(124,92,231,0.18); color: var(--purple); }
+  .pipe-step .label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .pipe-step .name {
+    font-size: 12px;
+    color: var(--text-bright);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+  .pipe-arrow {
+    color: var(--border-active);
+    font-size: 18px;
+    flex-shrink: 0;
+    padding: 0 2px;
+  }
+
+  /* ── Section titles ────────────────────────────────── */
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .section-title .hash {
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+  .section-title h2 {
+    font-size: 20px;
+    color: var(--text-bright);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .section-title .line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Command cards ─────────────────────────────────── */
+  .cmds {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 56px;
+  }
+  @media (max-width: 860px) { .cmds { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .cmds { grid-template-columns: 1fr; } }
+
+  .cmd-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px;
+    position: relative;
+    transition: border-color 0.25s;
+  }
+  .cmd-card:hover { border-color: var(--border-active); }
+  .cmd-card .cmd-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 4px;
+  }
+  .cmd-card .cmd-tag {
+    display: inline-block;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 2px;
+    margin-bottom: 10px;
+  }
+  .cmd-card .cmd-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.65;
+  }
+
+  /* ── Command color accents ─────────────────────────── */
+  .cmd-card.c-flowchart { border-left: 3px solid var(--red); }
+  .cmd-card.c-flowchart .cmd-tag { background: rgba(217,74,74,0.15); color: var(--red); }
+  .cmd-card.c-signals { border-left: 3px solid var(--amber); }
+  .cmd-card.c-signals .cmd-tag { background: rgba(212,145,30,0.15); color: var(--amber); }
+  .cmd-card.c-gen { border-left: 3px solid var(--blue); }
+  .cmd-card.c-gen .cmd-tag { background: rgba(59,130,196,0.15); color: var(--blue); }
+  .cmd-card.c-validate { border-left: 3px solid var(--green); }
+  .cmd-card.c-validate .cmd-tag { background: rgba(30,166,114,0.15); color: var(--green); }
+  .cmd-card.c-diag { border-left: 3px solid var(--purple); }
+  .cmd-card.c-diag .cmd-tag { background: rgba(124,92,231,0.15); color: var(--purple); }
+  .cmd-card.c-scaffold { border-left: 3px solid var(--cyan); }
+  .cmd-card.c-scaffold .cmd-tag { background: rgba(42,168,176,0.15); color: var(--cyan); }
+
+  /* ── Brand grid ────────────────────────────────────── */
+  .brands {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 56px;
+  }
+  @media (max-width: 640px) { .brands { grid-template-columns: repeat(2, 1fr); } }
+  .brand-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    text-align: center;
+  }
+  .brand-card .brand-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-bright);
+    margin-bottom: 2px;
+  }
+  .brand-card .brand-proto {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.03em;
+  }
+  .brand-card .brand-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+
+  /* ── Architecture diagram ──────────────────────────── */
+  .arch {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 32px 24px;
+    margin-bottom: 56px;
+  }
+  .arch-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+  }
+  .arch-layer {
+    width: 100%;
+    max-width: 600px;
+    padding: 16px 22px;
+    border-radius: 4px;
+    text-align: center;
+  }
+  .arch-layer.top {
+    background: rgba(59,130,196,0.08);
+    border: 1px solid rgba(59,130,196,0.25);
+  }
+  .arch-layer.mid {
+    background: rgba(212,145,30,0.06);
+    border: 1px solid rgba(212,145,30,0.20);
+  }
+  .arch-layer.bot {
+    background: rgba(30,166,114,0.06);
+    border: 1px solid rgba(30,166,114,0.20);
+  }
+  .arch-layer .layer-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-bright);
+  }
+  .arch-layer .layer-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+  .arch-arrow-down {
+    color: var(--border-active);
+    font-size: 16px;
+    text-align: center;
+  }
+
+  /* ── Footer stats ──────────────────────────────────── */
+  .footer-bar {
+    display: flex;
+    gap: 32px;
+    padding: 18px 22px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+  .footer-bar .stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .footer-bar .stat-val {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-bright);
+  }
+
+  /* ── Corner accents ────────────────────────────────── */
+  .corner-accent {
+    position: relative;
+  }
+  .corner-accent::before,
+  .corner-accent::after {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ══ Status Strip ════════════════════════════════ -->
+  <div class="status-strip">
+    <span><span class="status-dot green pulse"></span>SYSTEM ONLINE</span>
+    <span><span class="status-dot green"></span>Omron FINS</span>
+    <span><span class="status-dot green"></span>Siemens S7</span>
+    <span><span class="status-dot amber"></span>Modbus TCP</span>
+    <span><span class="status-dot green"></span>Mitsubishi Melsec</span>
+    <span style="margin-left:auto;">v1.0 · ELECTRICAL.md LOADED</span>
+  </div>
+
+  <!-- ══ Hero ════════════════════════════════════════ -->
+  <div class="hero">
+    <div class="hero-badge">▸ CLAUDE CODE SKILL</div>
+    <h1><span class="slash">/</span><span class="cmd">plc-dev</span></h1>
+    <p class="subtitle">
+      上位机-PLC 对接开发工具包 &mdash; 从需求分析到代码生成再到故障诊断的完整流水线。
+      标准化公司内部电气模块开发流程，一版模板，多项目复用。
+    </p>
+  </div>
+
+  <!-- ══ Pipeline ════════════════════════════════════ -->
+  <div class="pipeline">
+    <div class="pipe-step">
+      <div class="num">①</div>
+      <div class="label">需求</div>
+      <div class="name">自然语言描述</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="num">②</div>
+      <div class="label">流程图</div>
+      <div class="name">Mermaid 时序图</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="num">③</div>
+      <div class="label">信号定义</div>
+      <div class="name">CSV 信号表</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="num">④</div>
+      <div class="label">代码生成</div>
+      <div class="name">Handler 实现</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="num">⑤</div>
+      <div class="label">校验</div>
+      <div class="name">一致性报告</div>
+    </div>
+  </div>
+
+  <!-- ══ Commands ════════════════════════════════════ -->
+  <div class="section-title">
+    <span class="hash">##</span>
+    <h2>命令清单</h2>
+    <span class="line"></span>
+  </div>
+
+  <div class="cmds">
+    <div class="cmd-card c-flowchart">
+      <div class="cmd-name">/ flowchart</div>
+      <div class="cmd-tag">PHASE 1 · ANALYSIS</div>
+      <div class="cmd-desc">
+        输入自然语言工位需求，输出 Mermaid 时序图 + 状态迁移图 + 信号清单。
+        自动识别异常分支（超时/重试/降级），标注 PLC↔PC 握手序列。
+      </div>
+    </div>
+    <div class="cmd-card c-signals">
+      <div class="cmd-name">/ define-signals</div>
+      <div class="cmd-tag">PHASE 2 · DEFINITION</div>
+      <div class="cmd-desc">
+        从已确认的流程图中提取所有信号交互点，按命名规范自动生成信号名，建议空闲地址，
+        输出 CSV 行直接追加到 signals_config.csv。
+      </div>
+    </div>
+    <div class="cmd-card c-gen">
+      <div class="cmd-name">/ gen-station</div>
+      <div class="cmd-tag">PHASE 3 · CODE GEN</div>
+      <div class="cmd-desc">
+        基于流程图 + 信号表生成 IStationHandler 实现类，包含心跳检查、信号等待、动作执行
+        三步循环，自动注入超时/重试/异常处理代码。
+      </div>
+    </div>
+    <div class="cmd-card c-validate">
+      <div class="cmd-name">/ validate</div>
+      <div class="cmd-tag">PHASE 4 · CHECK</div>
+      <div class="cmd-desc">
+        6 项全量校验：CSV→代码引用、代码→CSV 存在、地址冲突、方向一致性、
+        心跳信号存在、触发-结果成对。输出通过/警告/错误分级报告。
+      </div>
+    </div>
+    <div class="cmd-card c-diag">
+      <div class="cmd-name">/ diag</div>
+      <div class="cmd-tag">PHASE 5 · DEBUG</div>
+      <div class="cmd-desc">
+        五层逐级排查：L1 物理连接 → L2 连接状态 → L3 心跳信号 → L4 单信号读写 →
+        L5 工位逻辑。每层输出诊断结论和修复建议。
+      </div>
+    </div>
+    <div class="cmd-card c-scaffold">
+      <div class="cmd-name">/ scaffold</div>
+      <div class="cmd-tag">NEW PROJECT</div>
+      <div class="cmd-desc">
+        新项目一键生成 PLC 通信层完整骨架：PlcMonitor + PlcChannel + ConnectionFactory +
+        SignalReader + 配置模板 + IStationHandler 接口。
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Brands ═════════════════════════════════════ -->
+  <div class="section-title">
+    <span class="hash">##</span>
+    <h2>品牌支持</h2>
+    <span class="line"></span>
+  </div>
+
+  <div class="brands">
+    <div class="brand-card">
+      <div class="brand-name"><span class="brand-dot" style="background:var(--blue);box-shadow:0 0 6px var(--blue-glow);"></span>Omron</div>
+      <div class="brand-proto">FINS TCP · Port 9600</div>
+    </div>
+    <div class="brand-card">
+      <div class="brand-name"><span class="brand-dot" style="background:var(--green);box-shadow:0 0 6px var(--green-glow);"></span>Siemens</div>
+      <div class="brand-proto">S7-1200/1500 · Port 102</div>
+    </div>
+    <div class="brand-card">
+      <div class="brand-name"><span class="brand-dot" style="background:var(--amber);box-shadow:0 0 6px var(--amber-glow);"></span>Modbus</div>
+      <div class="brand-proto">Modbus TCP · Port 502</div>
+    </div>
+    <div class="brand-card">
+      <div class="brand-name"><span class="brand-dot" style="background:var(--purple);box-shadow:0 0 6px rgba(124,92,231,0.25);"></span>Mitsubishi</div>
+      <div class="brand-proto">Melsec MC · Port 6000</div>
+    </div>
+  </div>
+
+  <!-- ══ Architecture ════════════════════════════════ -->
+  <div class="section-title">
+    <span class="hash">##</span>
+    <h2>架构模式</h2>
+    <span class="line"></span>
+  </div>
+
+  <div class="arch">
+    <div class="arch-layers">
+      <div class="arch-layer top">
+        <div class="layer-name">PlcMonitor &mdash; 顶层管理器</div>
+        <div class="layer-desc">加载 JSON/CSV 配置 · 创建 PlcChannel 列表 · 暴露按信号名读写 API · 全局心跳管理</div>
+      </div>
+      <div class="arch-arrow-down">▼</div>
+      <div class="arch-layer mid">
+        <div class="layer-name">PlcChannel &mdash; 单 PLC 通道</div>
+        <div class="layer-desc">连接-轮询-重连循环 · ConcurrentDictionary 信号值缓存 · Rx Subject 推送更新 · RetryPolicy 指数退避</div>
+      </div>
+      <div class="arch-arrow-down">▼</div>
+      <div class="arch-layer bot">
+        <div class="layer-name">IPlcConnection &mdash; 品牌无关接口</div>
+        <div class="layer-desc">OmronConnection / SiemensConnection / ModbusConnection / MitsubishiConnection · Connect / Read&lt;T&gt; / Write · PlcConnectionFactory 路由</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Footer ═════════════════════════════════════ -->
+  <div class="footer-bar">
+    <div class="stat"><span class="stat-val">6</span> 命令</div>
+    <div class="stat"><span class="stat-val">4</span> PLC 品牌</div>
+    <div class="stat"><span class="stat-val">7</span> 章架构文档</div>
+    <div class="stat"><span class="stat-val">5</span> 层诊断体系</div>
+    <span style="margin-left:auto;">ELECTRICAL.md · /plc-dev SKILL.md · 离线可用</span>
+  </div>
+
+</div>
+
+</body>
+</html>
