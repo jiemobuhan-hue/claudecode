@@ -3,570 +3,1039 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>/plc-dev — 上位机 PLC 开发工具包</title>
+<title>/plc-dev — 上位机 PLC 对接开发工具包</title>
 <style>
   @font-face {
     font-family: 'JetBrains Mono';
     src: local('JetBrains Mono'), local('JetBrainsMono'), local('Consolas'), local('monospace');
-    font-weight: 300 700;
   }
 
   :root {
-    --bg-deep: #0a0e14;
-    --bg-panel: #11171f;
-    --bg-card: #161c26;
-    --border: #1e2a3a;
-    --border-active: #2a3a50;
-    --text-dim: #5a6a82;
-    --text-body: #8899b4;
-    --text-bright: #c8d6e5;
-    --amber: #d4911e;
-    --amber-glow: rgba(212, 145, 30, 0.30);
-    --green: #1ea672;
-    --green-glow: rgba(30, 166, 114, 0.30);
-    --red: #d94a4a;
-    --red-glow: rgba(217, 74, 74, 0.25);
-    --blue: #3b82c4;
-    --blue-glow: rgba(59, 130, 196, 0.25);
-    --purple: #7c5ce7;
-    --orange: #d97a2b;
-    --cyan: #2aa8b0;
-    --scanline: rgba(255,255,255,0.012);
+    --bg: #f4f5f7;
+    --bg-card: #ffffff;
+    --bg-panel: #e8eaef;
+    --bg-code: #1e2233;
+    --border: #d5d9e0;
+    --border-active: #b0b8c4;
+    --text-dim: #7a8290;
+    --text-body: #3a4250;
+    --text-bright: #1a1f2b;
+    --text-on-dark: #c8d2e0;
+    --red: #d1453b;
+    --red-bg: rgba(209,69,59,0.08);
+    --amber: #c27a0e;
+    --amber-bg: rgba(194,122,14,0.08);
+    --green: #1e8a5e;
+    --green-bg: rgba(30,138,94,0.08);
+    --blue: #2e6eb5;
+    --blue-bg: rgba(46,110,181,0.08);
+    --purple: #6b47c8;
+    --purple-bg: rgba(107,71,200,0.08);
+    --cyan: #1a7f87;
+    --cyan-bg: rgba(26,127,135,0.08);
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.04);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
-    background: var(--bg-deep);
+    background: var(--bg);
     color: var(--text-body);
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
-    min-height: 100vh;
-    overflow-x: hidden;
+    font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    line-height: 1.6;
   }
+  code, pre, .mono { font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace; }
 
-  /* ── Scanline overlay ─────────────────────────────── */
-  body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 9999;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      var(--scanline) 2px,
-      var(--scanline) 4px
-    );
-  }
-
-  /* ── Grid pattern ─────────────────────────────────── */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 0;
-    background-image:
-      linear-gradient(rgba(30,42,58,0.15) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(30,42,58,0.15) 1px, transparent 1px);
-    background-size: 48px 48px;
-    mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 20%, transparent 70%);
-    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 20%, transparent 70%);
-  }
-
-  /* ── Layout ───────────────────────────────────────── */
-  .container {
-    position: relative;
-    z-index: 1;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 60px 32px 80px;
-  }
-
-  /* ── Top bar / status strip ───────────────────────── */
-  .status-strip {
+  /* ── Top Nav ─────────────────────────────────────── */
+  .topnav {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 52px;
     display: flex;
-    gap: 28px;
-    padding: 10px 18px;
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    margin-bottom: 40px;
     align-items: center;
+    gap: 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow);
+  }
+  .topnav .logo {
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--text-bright);
+  }
+  .topnav .logo .slash { color: var(--red); }
+  .topnav .logo .cmd { color: var(--blue); }
+  .topnav a {
+    text-decoration: none;
+    font-size: 13px;
+    color: var(--text-dim);
+    transition: color 0.15s;
+  }
+  .topnav a:hover { color: var(--text-bright); }
+  .topnav .version {
+    margin-left: auto;
     font-size: 11px;
     color: var(--text-dim);
-    letter-spacing: 0.04em;
-  }
-  .status-dot {
-    display: inline-block;
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    margin-right: 6px;
-    position: relative;
-  }
-  .status-dot.green { background: var(--green); box-shadow: 0 0 8px var(--green-glow); }
-  .status-dot.amber { background: var(--amber); box-shadow: 0 0 8px var(--amber-glow); }
-  .status-dot.pulse { animation: pulse 2s infinite; }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.35; }
+    background: var(--bg-panel);
+    padding: 3px 10px;
+    border-radius: 3px;
   }
 
-  /* ── Hero ──────────────────────────────────────────── */
-  .hero {
-    margin-bottom: 56px;
-  }
+  /* ── Container ────────────────────────────────────── */
+  .container { max-width: 1080px; margin: 0 auto; padding: 48px 32px 80px; }
+
+  /* ── Hero ─────────────────────────────────────────── */
+  .hero { margin-bottom: 52px; }
   .hero-badge {
     display: inline-block;
-    background: var(--bg-card);
-    border: 1px solid var(--amber);
-    color: var(--amber);
-    padding: 4px 14px;
-    border-radius: 3px;
-    font-size: 11px;
-    letter-spacing: 0.08em;
+    background: var(--blue-bg);
+    color: var(--blue);
+    padding: 5px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
     margin-bottom: 20px;
+    border: 1px solid rgba(46,110,181,0.18);
   }
   .hero h1 {
-    font-size: 52px;
-    font-weight: 700;
+    font-size: 54px;
+    font-weight: 800;
     color: var(--text-bright);
     letter-spacing: -0.02em;
-    line-height: 1.1;
-    margin-bottom: 12px;
+    line-height: 1.15;
+    margin-bottom: 14px;
   }
-  .hero h1 .slash { color: var(--amber); }
+  .hero h1 .slash { color: var(--red); }
   .hero h1 .cmd { color: var(--blue); }
   .hero .subtitle {
-    font-size: 15px;
+    font-size: 16px;
     color: var(--text-dim);
-    max-width: 580px;
-    line-height: 1.7;
+    max-width: 640px;
+    line-height: 1.8;
+    margin-bottom: 24px;
+  }
+  .hero-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 20px;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: default;
+    text-decoration: none;
+    transition: box-shadow 0.15s;
+  }
+  .btn-primary {
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    box-shadow: 0 2px 8px rgba(46,110,181,0.3);
+  }
+  .btn-outline {
+    background: var(--bg-card);
+    color: var(--text-bright);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
   }
 
-  /* ── Pipeline visual ───────────────────────────────── */
+  /* ── Pipeline ─────────────────────────────────────── */
   .pipeline {
     display: flex;
     align-items: center;
-    gap: 0;
-    margin-bottom: 56px;
-    background: var(--bg-panel);
+    background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 28px 20px;
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin-bottom: 56px;
+    box-shadow: var(--shadow);
     overflow-x: auto;
+    gap: 0;
   }
   .pipe-step {
     flex: 1;
-    min-width: 100px;
+    min-width: 110px;
     text-align: center;
-    position: relative;
   }
   .pipe-step .num {
-    display: inline-block;
-    width: 36px; height: 36px;
-    line-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px; height: 38px;
     border-radius: 50%;
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 15px;
+    font-weight: 800;
     margin-bottom: 8px;
   }
-  .pipe-step:nth-child(1) .num { background: rgba(217,74,74,0.18); color: var(--red); }
-  .pipe-step:nth-child(3) .num { background: rgba(212,145,30,0.18); color: var(--amber); }
-  .pipe-step:nth-child(5) .num { background: rgba(59,130,196,0.18); color: var(--blue); }
-  .pipe-step:nth-child(7) .num { background: rgba(30,166,114,0.18); color: var(--green); }
-  .pipe-step:nth-child(9) .num { background: rgba(124,92,231,0.18); color: var(--purple); }
+  .pipe-step:nth-child(1) .num { background: var(--red-bg); color: var(--red); }
+  .pipe-step:nth-child(3) .num { background: var(--amber-bg); color: var(--amber); }
+  .pipe-step:nth-child(5) .num { background: var(--blue-bg); color: var(--blue); }
+  .pipe-step:nth-child(7) .num { background: var(--green-bg); color: var(--green); }
+  .pipe-step:nth-child(9) .num { background: var(--purple-bg); color: var(--purple); }
   .pipe-step .label {
     font-size: 10px;
     color: var(--text-dim);
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
+    font-weight: 600;
   }
   .pipe-step .name {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-bright);
     font-weight: 600;
-    margin-top: 2px;
+    margin-top: 3px;
   }
   .pipe-arrow {
     color: var(--border-active);
-    font-size: 18px;
+    font-size: 20px;
+    font-weight: 300;
     flex-shrink: 0;
-    padding: 0 2px;
+    padding: 0 6px;
+    margin-bottom: 20px;
   }
 
-  /* ── Section titles ────────────────────────────────── */
-  .section-title {
+  /* ── Section ──────────────────────────────────────── */
+  .section { margin-bottom: 60px; }
+  .section-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 28px;
+    gap: 10px;
+    margin-bottom: 24px;
   }
-  .section-title .hash {
+  .section-num {
+    font-size: 11px;
+    font-weight: 700;
     color: var(--text-dim);
-    font-size: 13px;
+    letter-spacing: 0.06em;
   }
-  .section-title h2 {
-    font-size: 20px;
+  .section-header h2 {
+    font-size: 22px;
     color: var(--text-bright);
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: -0.01em;
   }
-  .section-title .line {
+  .section-header .line {
     flex: 1;
     height: 1px;
     background: var(--border);
   }
 
-  /* ── Command cards ─────────────────────────────────── */
-  .cmds {
+  /* ── Cards grid ───────────────────────────────────── */
+  .card-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 14px;
-    margin-bottom: 56px;
   }
-  @media (max-width: 860px) { .cmds { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 560px) { .cmds { grid-template-columns: 1fr; } }
+  @media (max-width: 900px) { .card-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 580px) { .card-grid { grid-template-columns: 1fr; } }
 
-  .cmd-card {
+  .card {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 20px;
-    position: relative;
-    transition: border-color 0.25s;
+    border-radius: 8px;
+    padding: 22px;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.2s, transform 0.15s;
   }
-  .cmd-card:hover { border-color: var(--border-active); }
-  .cmd-card .cmd-name {
+  .card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+  .card .card-icon {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .card .card-name {
     font-size: 15px;
     font-weight: 700;
     color: var(--text-bright);
-    margin-bottom: 4px;
+    margin-bottom: 3px;
   }
-  .cmd-card .cmd-tag {
-    display: inline-block;
-    font-size: 9px;
-    letter-spacing: 0.06em;
-    padding: 2px 8px;
-    border-radius: 2px;
+  .card .card-phase {
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    font-weight: 600;
     margin-bottom: 10px;
   }
-  .cmd-card .cmd-desc {
-    font-size: 12px;
+  .card .card-desc {
+    font-size: 13px;
     color: var(--text-dim);
-    line-height: 1.65;
+    line-height: 1.7;
+  }
+  .card .card-example {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: var(--bg-panel);
+    border-radius: 5px;
+    font-size: 11px;
+    color: var(--text-body);
+    line-height: 1.6;
+    border-left: 3px solid var(--border-active);
+  }
+  .card .card-example .prompt {
+    color: var(--blue);
+    font-weight: 600;
   }
 
-  /* ── Command color accents ─────────────────────────── */
-  .cmd-card.c-flowchart { border-left: 3px solid var(--red); }
-  .cmd-card.c-flowchart .cmd-tag { background: rgba(217,74,74,0.15); color: var(--red); }
-  .cmd-card.c-signals { border-left: 3px solid var(--amber); }
-  .cmd-card.c-signals .cmd-tag { background: rgba(212,145,30,0.15); color: var(--amber); }
-  .cmd-card.c-gen { border-left: 3px solid var(--blue); }
-  .cmd-card.c-gen .cmd-tag { background: rgba(59,130,196,0.15); color: var(--blue); }
-  .cmd-card.c-validate { border-left: 3px solid var(--green); }
-  .cmd-card.c-validate .cmd-tag { background: rgba(30,166,114,0.15); color: var(--green); }
-  .cmd-card.c-diag { border-left: 3px solid var(--purple); }
-  .cmd-card.c-diag .cmd-tag { background: rgba(124,92,231,0.15); color: var(--purple); }
-  .cmd-card.c-scaffold { border-left: 3px solid var(--cyan); }
-  .cmd-card.c-scaffold .cmd-tag { background: rgba(42,168,176,0.15); color: var(--cyan); }
+  /* ── Card colors ──────────────────────────────────── */
+  .card.c-red .card-icon { background: var(--red-bg); color: var(--red); }
+  .card.c-red .card-phase { color: var(--red); }
+  .card.c-amber .card-icon { background: var(--amber-bg); color: var(--amber); }
+  .card.c-amber .card-phase { color: var(--amber); }
+  .card.c-blue .card-icon { background: var(--blue-bg); color: var(--blue); }
+  .card.c-blue .card-phase { color: var(--blue); }
+  .card.c-green .card-icon { background: var(--green-bg); color: var(--green); }
+  .card.c-green .card-phase { color: var(--green); }
+  .card.c-purple .card-icon { background: var(--purple-bg); color: var(--purple); }
+  .card.c-purple .card-phase { color: var(--purple); }
+  .card.c-cyan .card-icon { background: var(--cyan-bg); color: var(--cyan); }
+  .card.c-cyan .card-phase { color: var(--cyan); }
 
-  /* ── Brand grid ────────────────────────────────────── */
-  .brands {
+  /* ── Detail section ───────────────────────────────── */
+  .detail-block {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+  .detail-block h3 {
+    font-size: 17px;
+    color: var(--text-bright);
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .detail-block h3 .accent { font-weight: 800; }
+  .detail-block .sub {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 18px;
+  }
+  .detail-block p { font-size: 14px; color: var(--text-body); line-height: 1.8; margin-bottom: 10px; }
+
+  /* ── Brand bar ────────────────────────────────────── */
+  .brand-bar {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 12px;
-    margin-bottom: 56px;
+    margin-bottom: 16px;
   }
-  @media (max-width: 640px) { .brands { grid-template-columns: repeat(2, 1fr); } }
-  .brand-card {
+  @media (max-width: 640px) { .brand-bar { grid-template-columns: repeat(2, 1fr); } }
+  .brand {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 16px;
+    border-radius: 8px;
+    padding: 18px 16px;
     text-align: center;
+    box-shadow: var(--shadow);
   }
-  .brand-card .brand-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-bright);
-    margin-bottom: 2px;
-  }
-  .brand-card .brand-proto {
-    font-size: 10px;
-    color: var(--text-dim);
-    letter-spacing: 0.03em;
-  }
-  .brand-card .brand-dot {
+  .brand .b-name { font-size: 15px; font-weight: 700; color: var(--text-bright); }
+  .brand .b-proto { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+  .brand .b-port { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  .brand .b-dot {
     display: inline-block;
-    width: 6px; height: 6px;
+    width: 10px; height: 10px;
     border-radius: 50%;
-    margin-right: 5px;
-    vertical-align: middle;
+    margin-bottom: 6px;
   }
 
-  /* ── Architecture diagram ──────────────────────────── */
-  .arch {
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
+  /* ── Code block ───────────────────────────────────── */
+  .code-block {
+    background: var(--bg-code);
     border-radius: 8px;
-    padding: 32px 24px;
-    margin-bottom: 56px;
+    padding: 18px 22px;
+    margin: 14px 0;
+    overflow-x: auto;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.25);
   }
-  .arch-layers {
+  .code-block pre {
+    font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--text-on-dark);
+    white-space: pre;
+  }
+  .code-block .kw { color: #c792ea; }
+  .code-block .str { color: #c3e88d; }
+  .code-block .cmt { color: #546e7a; }
+  .code-block .fn { color: #82aaff; }
+  .code-block .type { color: #ffcb6b; }
+
+  /* ── Architecture ─────────────────────────────────── */
+  .arch-row {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     align-items: center;
   }
-  .arch-layer {
+  .arch-box {
     width: 100%;
-    max-width: 600px;
-    padding: 16px 22px;
-    border-radius: 4px;
-    text-align: center;
-  }
-  .arch-layer.top {
-    background: rgba(59,130,196,0.08);
-    border: 1px solid rgba(59,130,196,0.25);
-  }
-  .arch-layer.mid {
-    background: rgba(212,145,30,0.06);
-    border: 1px solid rgba(212,145,30,0.20);
-  }
-  .arch-layer.bot {
-    background: rgba(30,166,114,0.06);
-    border: 1px solid rgba(30,166,114,0.20);
-  }
-  .arch-layer .layer-name {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text-bright);
-  }
-  .arch-layer .layer-desc {
-    font-size: 11px;
-    color: var(--text-dim);
-    margin-top: 4px;
-  }
-  .arch-arrow-down {
-    color: var(--border-active);
-    font-size: 16px;
-    text-align: center;
-  }
-
-  /* ── Footer stats ──────────────────────────────────── */
-  .footer-bar {
-    display: flex;
-    gap: 32px;
-    padding: 18px 22px;
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
+    max-width: 640px;
+    padding: 18px 24px;
     border-radius: 6px;
-    font-size: 11px;
-    color: var(--text-dim);
-    letter-spacing: 0.04em;
+    text-align: center;
   }
-  .footer-bar .stat {
+  .arch-box.top {
+    background: var(--blue-bg);
+    border: 1px solid rgba(46,110,181,0.22);
+  }
+  .arch-box.mid {
+    background: var(--amber-bg);
+    border: 1px solid rgba(194,122,14,0.20);
+  }
+  .arch-box.bot {
+    background: var(--green-bg);
+    border: 1px solid rgba(30,138,94,0.20);
+  }
+  .arch-box .a-name { font-size: 15px; font-weight: 700; color: var(--text-bright); }
+  .arch-box .a-desc { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+  .arch-arrow { color: var(--border-active); font-size: 18px; text-align: center; font-weight: 300; }
+
+  /* ── Diag flow ────────────────────────────────────── */
+  .diag-flow {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 12px 0;
   }
-  .footer-bar .stat-val {
-    font-size: 18px;
-    font-weight: 700;
+  .diag-step {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 16px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
     color: var(--text-bright);
   }
+  .diag-step small { display: block; color: var(--text-dim); font-weight: 400; }
+  .diag-arrow { color: var(--border-active); font-size: 16px; }
 
-  /* ── Corner accents ────────────────────────────────── */
-  .corner-accent {
-    position: relative;
+  /* ── Two col ──────────────────────────────────────── */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
   }
-  .corner-accent::before,
-  .corner-accent::after {
-    content: '';
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* ── Steps list ───────────────────────────────────── */
+  .steps-list {
+    counter-reset: step;
+    list-style: none;
+  }
+  .steps-list li {
+    counter-increment: step;
+    padding: 10px 0 10px 36px;
+    position: relative;
+    font-size: 13px;
+    color: var(--text-body);
+    line-height: 1.7;
+    border-bottom: 1px solid var(--border);
+  }
+  .steps-list li::before {
+    content: counter(step);
     position: absolute;
-    width: 12px; height: 12px;
+    left: 0;
+    top: 10px;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    text-align: center;
+    line-height: 24px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-dim);
+  }
+
+  /* ── Table ────────────────────────────────────────── */
+  .info-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .info-table th {
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--bg-panel);
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    border-bottom: 2px solid var(--border);
+  }
+  .info-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-body);
+  }
+  .info-table tr:hover td { background: var(--bg-panel); }
+
+  /* ── Footer ───────────────────────────────────────── */
+  .footer {
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    padding: 28px 32px;
+    display: flex;
+    gap: 36px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--text-dim);
+    box-shadow: var(--shadow);
+  }
+  .footer .f-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .footer .f-val {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--text-bright);
+  }
+  .footer .f-note {
+    margin-left: auto;
+    align-self: center;
+    font-size: 11px;
   }
 </style>
 </head>
 <body>
 
+<!-- ══ Top Nav ══════════════════════════════════════ -->
+<nav class="topnav">
+  <span class="logo"><span class="slash">/</span><span class="cmd">plc-dev</span></span>
+  <a href="#commands">命令</a>
+  <a href="#brands">品牌</a>
+  <a href="#arch">架构</a>
+  <a href="#diag">诊断</a>
+  <a href="#workflow">工作流</a>
+  <span class="version">v1.0 · ELECTRICAL.md</span>
+</nav>
+
 <div class="container">
 
-  <!-- ══ Status Strip ════════════════════════════════ -->
-  <div class="status-strip">
-    <span><span class="status-dot green pulse"></span>SYSTEM ONLINE</span>
-    <span><span class="status-dot green"></span>Omron FINS</span>
-    <span><span class="status-dot green"></span>Siemens S7</span>
-    <span><span class="status-dot amber"></span>Modbus TCP</span>
-    <span><span class="status-dot green"></span>Mitsubishi Melsec</span>
-    <span style="margin-left:auto;">v1.0 · ELECTRICAL.md LOADED</span>
-  </div>
-
   <!-- ══ Hero ════════════════════════════════════════ -->
-  <div class="hero">
-    <div class="hero-badge">▸ CLAUDE CODE SKILL</div>
+  <section class="hero">
+    <div class="hero-badge">CLAUDE CODE SKILL</div>
     <h1><span class="slash">/</span><span class="cmd">plc-dev</span></h1>
     <p class="subtitle">
-      上位机-PLC 对接开发工具包 &mdash; 从需求分析到代码生成再到故障诊断的完整流水线。
-      标准化公司内部电气模块开发流程，一版模板，多项目复用。
+      上位机-PLC 对接开发工具包。将电气需求转化为可运行代码的标准化流水线
+      &mdash; 从画时序图、定义信号表，到生成工位处理器、在线诊断，
+      一套命令覆盖完整开发周期。支持 Omron / Siemens / Modbus / Mitsubishi 四大品牌。
     </p>
-  </div>
+    <div class="hero-actions">
+      <span class="btn btn-primary">/plc-dev flowchart ...</span>
+      <span class="btn btn-outline">查看 ELECTRICAL.md</span>
+    </div>
+  </section>
 
   <!-- ══ Pipeline ════════════════════════════════════ -->
   <div class="pipeline">
     <div class="pipe-step">
-      <div class="num">①</div>
-      <div class="label">需求</div>
-      <div class="name">自然语言描述</div>
+      <div class="num">1</div>
+      <div class="label">需求分析</div>
+      <div class="name">flowchart</div>
     </div>
     <div class="pipe-arrow">→</div>
     <div class="pipe-step">
-      <div class="num">②</div>
-      <div class="label">流程图</div>
-      <div class="name">Mermaid 时序图</div>
-    </div>
-    <div class="pipe-arrow">→</div>
-    <div class="pipe-step">
-      <div class="num">③</div>
+      <div class="num">2</div>
       <div class="label">信号定义</div>
-      <div class="name">CSV 信号表</div>
+      <div class="name">define-signals</div>
     </div>
     <div class="pipe-arrow">→</div>
     <div class="pipe-step">
-      <div class="num">④</div>
+      <div class="num">3</div>
       <div class="label">代码生成</div>
-      <div class="name">Handler 实现</div>
+      <div class="name">gen-station</div>
     </div>
     <div class="pipe-arrow">→</div>
     <div class="pipe-step">
-      <div class="num">⑤</div>
-      <div class="label">校验</div>
-      <div class="name">一致性报告</div>
+      <div class="num">4</div>
+      <div class="label">一致性校验</div>
+      <div class="name">validate</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="num">5</div>
+      <div class="label">故障诊断</div>
+      <div class="name">diag</div>
     </div>
   </div>
 
   <!-- ══ Commands ════════════════════════════════════ -->
-  <div class="section-title">
-    <span class="hash">##</span>
-    <h2>命令清单</h2>
-    <span class="line"></span>
-  </div>
+  <section class="section" id="commands">
+    <div class="section-header">
+      <span class="section-num">01</span>
+      <h2>命令详解</h2>
+      <span class="line"></span>
+    </div>
 
-  <div class="cmds">
-    <div class="cmd-card c-flowchart">
-      <div class="cmd-name">/ flowchart</div>
-      <div class="cmd-tag">PHASE 1 · ANALYSIS</div>
-      <div class="cmd-desc">
-        输入自然语言工位需求，输出 Mermaid 时序图 + 状态迁移图 + 信号清单。
-        自动识别异常分支（超时/重试/降级），标注 PLC↔PC 握手序列。
+    <div class="card-grid">
+
+      <div class="card c-red">
+        <div class="card-icon">1</div>
+        <div class="card-name">flowchart</div>
+        <div class="card-phase">PHASE 1 · 需求分析</div>
+        <div class="card-desc">
+          输入工位的自然语言描述，输出标准的 Mermaid 时序图和状态迁移图。
+          自动识别异常分支（超时/重试/降级），标注 PLC 地址别名。
+        </div>
+        <div class="card-example">
+          <span class="prompt">$</span> /plc-dev flowchart "通道1来料：PLC触发→PC扫码→MOM查单→回写结果。超时3秒重试，MOM不可用走离线队列"<br>
+          <span style="color:var(--text-dim);">→ 生成 sequenceDiagram + stateDiagram + 信号清单</span>
+        </div>
       </div>
-    </div>
-    <div class="cmd-card c-signals">
-      <div class="cmd-name">/ define-signals</div>
-      <div class="cmd-tag">PHASE 2 · DEFINITION</div>
-      <div class="cmd-desc">
-        从已确认的流程图中提取所有信号交互点，按命名规范自动生成信号名，建议空闲地址，
-        输出 CSV 行直接追加到 signals_config.csv。
+
+      <div class="card c-amber">
+        <div class="card-icon">2</div>
+        <div class="card-name">define-signals</div>
+        <div class="card-phase">PHASE 2 · 信号定义</div>
+        <div class="card-desc">
+          从确认的流程图中自动提取所有 PLC↔PC 交互点，
+          按命名规范生成信号名，建议空闲地址，追加到 signals_config.csv。
+        </div>
+        <div class="card-example">
+          <span class="prompt">$</span> /plc-dev define-signals<br>
+          <span style="color:var(--text-dim);">→ 从流程图提取 4 个信号 · 分配地址 D3000-D3003 · 写入 CSV</span>
+        </div>
       </div>
-    </div>
-    <div class="cmd-card c-gen">
-      <div class="cmd-name">/ gen-station</div>
-      <div class="cmd-tag">PHASE 3 · CODE GEN</div>
-      <div class="cmd-desc">
-        基于流程图 + 信号表生成 IStationHandler 实现类，包含心跳检查、信号等待、动作执行
-        三步循环，自动注入超时/重试/异常处理代码。
+
+      <div class="card c-blue">
+        <div class="card-icon">3</div>
+        <div class="card-name">gen-station</div>
+        <div class="card-phase">PHASE 3 · 代码生成</div>
+        <div class="card-desc">
+          基于流程图 + 信号表，生成完整的 IStationHandler 实现类。
+          包含心跳检查、信号等待、动作执行三步循环，以及超时/重试/异常处理。
+        </div>
+        <div class="card-example">
+          <span class="prompt">$</span> /plc-dev gen-station --type Arrive --channel 1<br>
+          <span style="color:var(--text-dim);">→ 生成 NewStationHandler.cs · ~120 行 · 注册到 AutoRun.Init()</span>
+        </div>
       </div>
-    </div>
-    <div class="cmd-card c-validate">
-      <div class="cmd-name">/ validate</div>
-      <div class="cmd-tag">PHASE 4 · CHECK</div>
-      <div class="cmd-desc">
-        6 项全量校验：CSV→代码引用、代码→CSV 存在、地址冲突、方向一致性、
-        心跳信号存在、触发-结果成对。输出通过/警告/错误分级报告。
+
+      <div class="card c-green">
+        <div class="card-icon">4</div>
+        <div class="card-name">validate</div>
+        <div class="card-phase">PHASE 4 · 一致性校验</div>
+        <div class="card-desc">
+          6 项全量检查：CSV→代码引用、代码→CSV 存在性、地址冲突、
+          读写方向一致性、心跳信号存在、触发-结果成对。输出分级报告。
+        </div>
+        <div class="card-example">
+          <span class="prompt">$</span> /plc-dev validate<br>
+          <span style="color:var(--text-dim);">→ ✅ 48 通过 · ⚠️ 2 警告 · ❌ 0 错误 · 报告已生成</span>
+        </div>
       </div>
-    </div>
-    <div class="cmd-card c-diag">
-      <div class="cmd-name">/ diag</div>
-      <div class="cmd-tag">PHASE 5 · DEBUG</div>
-      <div class="cmd-desc">
-        五层逐级排查：L1 物理连接 → L2 连接状态 → L3 心跳信号 → L4 单信号读写 →
-        L5 工位逻辑。每层输出诊断结论和修复建议。
+
+      <div class="card c-purple">
+        <div class="card-icon">5</div>
+        <div class="card-name">diag</div>
+        <div class="card-phase">PHASE 5 · 故障诊断</div>
+        <div class="card-desc">
+          五层逐级排查：物理连接 → PLC 连接状态 → 心跳信号 →
+          单信号读写测试 → 工位状态机逻辑。每层输出诊断结论和修复建议。
+        </div>
+        <div class="card-example">
+          <span class="prompt">$</span> /plc-dev diag "通道3来料不触发"<br>
+          <span style="color:var(--text-dim);">→ L3 心跳正常 · L4 信号 D1004=0 → PLC 侧未置位，检查传感器</span>
+        </div>
       </div>
-    </div>
-    <div class="cmd-card c-scaffold">
-      <div class="cmd-name">/ scaffold</div>
-      <div class="cmd-tag">NEW PROJECT</div>
-      <div class="cmd-desc">
-        新项目一键生成 PLC 通信层完整骨架：PlcMonitor + PlcChannel + ConnectionFactory +
-        SignalReader + 配置模板 + IStationHandler 接口。
+
+      <div class="card c-cyan">
+        <div class="card-icon">✦</div>
+        <div class="card-name">scaffold</div>
+        <div class="card-phase">新项目脚手架</div>
+        <div class="card-desc">
+          一键生成 PLC 通信层完整项目骨架：PlcMonitor + PlcChannel + ConnectionFactory +
+          SignalReader + RetryPolicy + 配置模板 + IStationHandler 接口。
+        </div>
+        <div class="card-example">
+          <span class="prompt">$</span> /plc-dev scaffold --brand Omron --plcs 2<br>
+          <span style="color:var(--text-dim);">→ 生成 12 个文件 · 含 plc_config.json + signals_config.csv + ELECTRICAL.md</span>
+        </div>
       </div>
+
     </div>
-  </div>
+  </section>
+
+  <!-- ══ Workflow example ════════════════════════════ -->
+  <section class="section" id="workflow">
+    <div class="section-header">
+      <span class="section-num">02</span>
+      <h2>完整工作流示例</h2>
+      <span class="line"></span>
+    </div>
+
+    <div class="detail-block">
+      <h3>场景：为新产线添加通道 5 来料工位</h3>
+      <p class="sub">从零开始，5 步完成 PLC 对接开发</p>
+
+      <ol class="steps-list">
+        <li>
+          <strong>描述需求</strong> &mdash;
+          <code>/plc-dev flowchart "通道5来料：PLC触发→PC扫码→MOM查单→回写结果。异常：扫码超时3秒重试2次，MOM不可用走离线队列"</code><br>
+          输出：Mermaid 时序图（含 alt 超时分支）+ 状态迁移图 + 5 个信号候选
+        </li>
+        <li>
+          <strong>定义信号</strong> &mdash;
+          <code>/plc-dev define-signals</code><br>
+          自动提取信号：PLC通道5来料触发(D3000) / 来料电芯码(D3001) / 来料结果(D3002) / 来料复投触发(D3003) / 来料复投信息(D3004)<br>
+          用户确认后写入 signals_config.csv
+        </li>
+        <li>
+          <strong>生成代码</strong> &mdash;
+          <code>/plc-dev gen-station --type Arrive --channel 5</code><br>
+          生成 ProductArriveStationHandler5 类，包含完整的 CheckHeartbeatAsync / WaitForSignalAsync / ExecuteActionAsync<br>
+          自动注入：超时重试（3 次 × 3s）、MOM 离线队列降级、CancellationToken 检查
+        </li>
+        <li>
+          <strong>校验一致性</strong> &mdash;
+          <code>/plc-dev validate</code><br>
+          检查新增的 5 个信号是否都有代码引用，地址 D3000-D3004 是否与现有信号冲突，读写方向是否正确
+        </li>
+        <li>
+          <strong>部署后诊断</strong>（如需要）&mdash;
+          <code>/plc-dev diag "通道5来料不触发"</code><br>
+          逐层排查：ping PLC → 连接状态 → 心跳 → D3000 值 → 工位日志
+        </li>
+      </ol>
+    </div>
+  </section>
 
   <!-- ══ Brands ═════════════════════════════════════ -->
-  <div class="section-title">
-    <span class="hash">##</span>
-    <h2>品牌支持</h2>
-    <span class="line"></span>
-  </div>
+  <section class="section" id="brands">
+    <div class="section-header">
+      <span class="section-num">03</span>
+      <h2>品牌支持</h2>
+      <span class="line"></span>
+    </div>
 
-  <div class="brands">
-    <div class="brand-card">
-      <div class="brand-name"><span class="brand-dot" style="background:var(--blue);box-shadow:0 0 6px var(--blue-glow);"></span>Omron</div>
-      <div class="brand-proto">FINS TCP · Port 9600</div>
+    <div class="brand-bar">
+      <div class="brand">
+        <div class="b-dot" style="background:var(--blue);"></div>
+        <div class="b-name">Omron</div>
+        <div class="b-proto">FINS TCP</div>
+        <div class="b-port">默认端口 9600</div>
+      </div>
+      <div class="brand">
+        <div class="b-dot" style="background:var(--green);"></div>
+        <div class="b-name">Siemens</div>
+        <div class="b-proto">S7-1200 / 1500</div>
+        <div class="b-port">默认端口 102</div>
+      </div>
+      <div class="brand">
+        <div class="b-dot" style="background:var(--amber);"></div>
+        <div class="b-name">Modbus</div>
+        <div class="b-proto">Modbus TCP</div>
+        <div class="b-port">默认端口 502</div>
+      </div>
+      <div class="brand">
+        <div class="b-dot" style="background:var(--purple);"></div>
+        <div class="b-name">Mitsubishi</div>
+        <div class="b-proto">Melsec MC</div>
+        <div class="b-port">默认端口 6000</div>
+      </div>
     </div>
-    <div class="brand-card">
-      <div class="brand-name"><span class="brand-dot" style="background:var(--green);box-shadow:0 0 6px var(--green-glow);"></span>Siemens</div>
-      <div class="brand-proto">S7-1200/1500 · Port 102</div>
+
+    <div class="two-col">
+      <div class="detail-block">
+        <h3>地址格式</h3>
+        <table class="info-table">
+          <tr><th>品牌</th><th>地址示例</th><th>说明</th></tr>
+          <tr><td>Omron</td><td class="mono">D1000</td><td>D 区 / W 区，需 SA1/DA1 节点号</td></tr>
+          <tr><td>Siemens</td><td class="mono">DB1.DBW0</td><td>需在 TIA Portal 启用 PUT/GET</td></tr>
+          <tr><td>Modbus</td><td class="mono">40001</td><td>保持寄存器，功能码 03/06</td></tr>
+          <tr><td>Mitsubishi</td><td class="mono">D100</td><td>字地址，M0 为位地址</td></tr>
+        </table>
+      </div>
+      <div class="detail-block">
+        <h3>数据类型映射</h3>
+        <table class="info-table">
+          <tr><th>CSV 类型</th><th>C# 类型</th><th>字节</th></tr>
+          <tr><td>UShort</td><td class="mono">ushort</td><td>2</td></tr>
+          <tr><td>String(n)</td><td class="mono">string</td><td>n</td></tr>
+          <tr><td>ShortArray(n)</td><td class="mono">short[]</td><td>n×2</td></tr>
+          <tr><td>Float</td><td class="mono">float</td><td>4</td></tr>
+        </table>
+      </div>
     </div>
-    <div class="brand-card">
-      <div class="brand-name"><span class="brand-dot" style="background:var(--amber);box-shadow:0 0 6px var(--amber-glow);"></span>Modbus</div>
-      <div class="brand-proto">Modbus TCP · Port 502</div>
-    </div>
-    <div class="brand-card">
-      <div class="brand-name"><span class="brand-dot" style="background:var(--purple);box-shadow:0 0 6px rgba(124,92,231,0.25);"></span>Mitsubishi</div>
-      <div class="brand-proto">Melsec MC · Port 6000</div>
-    </div>
-  </div>
+  </section>
 
   <!-- ══ Architecture ════════════════════════════════ -->
-  <div class="section-title">
-    <span class="hash">##</span>
-    <h2>架构模式</h2>
-    <span class="line"></span>
-  </div>
+  <section class="section" id="arch">
+    <div class="section-header">
+      <span class="section-num">04</span>
+      <h2>架构模式</h2>
+      <span class="line"></span>
+    </div>
 
-  <div class="arch">
-    <div class="arch-layers">
-      <div class="arch-layer top">
-        <div class="layer-name">PlcMonitor &mdash; 顶层管理器</div>
-        <div class="layer-desc">加载 JSON/CSV 配置 · 创建 PlcChannel 列表 · 暴露按信号名读写 API · 全局心跳管理</div>
-      </div>
-      <div class="arch-arrow-down">▼</div>
-      <div class="arch-layer mid">
-        <div class="layer-name">PlcChannel &mdash; 单 PLC 通道</div>
-        <div class="layer-desc">连接-轮询-重连循环 · ConcurrentDictionary 信号值缓存 · Rx Subject 推送更新 · RetryPolicy 指数退避</div>
-      </div>
-      <div class="arch-arrow-down">▼</div>
-      <div class="arch-layer bot">
-        <div class="layer-name">IPlcConnection &mdash; 品牌无关接口</div>
-        <div class="layer-desc">OmronConnection / SiemensConnection / ModbusConnection / MitsubishiConnection · Connect / Read&lt;T&gt; / Write · PlcConnectionFactory 路由</div>
+    <div class="detail-block">
+      <div class="arch-row">
+        <div class="arch-box top">
+          <div class="a-name">PlcMonitor — 顶层管理器</div>
+          <div class="a-desc">加载 JSON/CSV 配置 · 创建 PlcChannel 列表 · 暴露 <code>TryGetLatestByName</code> / <code>ReadOnceByNameAsync</code> / <code>WriteByNameAsync</code> · 全局心跳管理</div>
+        </div>
+        <div class="arch-arrow">│<br>│<br>▼</div>
+        <div class="arch-box mid">
+          <div class="a-name">PlcChannel — 单 PLC 通道</div>
+          <div class="a-desc">连接-轮询-重连循环 · <code>ConcurrentDictionary</code> 信号值缓存 · Rx <code>Subject&lt;SignalUpdate&gt;</code> 推送 · <code>RetryPolicy</code> 指数退避 (500ms→30s)</div>
+        </div>
+        <div class="arch-arrow">│<br>│<br>▼</div>
+        <div class="arch-box bot">
+          <div class="a-name">IPlcConnection — 品牌无关接口</div>
+          <div class="a-desc"><code>OmronConnection</code> / <code>SiemensConnection</code> / <code>ModbusConnection</code> / <code>MitsubishiConnection</code> · <code>Connect()</code> · <code>Read&lt;T&gt;()</code> · <code>Write()</code> · <code>PlcConnectionFactory</code> 自动路由</div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- ══ Footer ═════════════════════════════════════ -->
-  <div class="footer-bar">
-    <div class="stat"><span class="stat-val">6</span> 命令</div>
-    <div class="stat"><span class="stat-val">4</span> PLC 品牌</div>
-    <div class="stat"><span class="stat-val">7</span> 章架构文档</div>
-    <div class="stat"><span class="stat-val">5</span> 层诊断体系</div>
-    <span style="margin-left:auto;">ELECTRICAL.md · /plc-dev SKILL.md · 离线可用</span>
-  </div>
+    <div class="two-col">
+      <div class="detail-block">
+        <h3>设计原则</h3>
+        <ul class="steps-list">
+          <li><strong>配置驱动</strong> — PLC IP/端口/信号全部通过 JSON/CSV 管理，不硬编码</li>
+          <li><strong>按名称访问</strong> — 业务代码用信号名（如 <code>"PLC通道1来料触发"</code>），不写地址字符串</li>
+          <li><strong>信号值缓存</strong> — 最新值常驻内存，业务代码读缓存不触发 I/O</li>
+          <li><strong>推送模式</strong> — 信号更新通过 Rx Subject 推送订阅者（UI 监控面板等）</li>
+          <li><strong>指数退避重连</strong> — base 500ms, max 30s, 最多 10 次重试</li>
+        </ul>
+      </div>
+      <div class="detail-block">
+        <h3>工位状态机模式</h3>
+        <div class="code-block">
+          <pre>// IStationHandler 接口契约
+<span class="kw">public interface</span> <span class="type">IStationHandler</span>
+{
+    <span class="cmt">// 检查通道心跳，失败抛异常</span>
+    <span class="type">Task</span>&lt;<span class="kw">bool</span>&gt; <span class="fn">CheckHeartbeatAsync</span>(token);
+
+    <span class="cmt">// 等待触发信号，超时返回 false</span>
+    <span class="type">Task</span>&lt;<span class="kw">bool</span>&gt; <span class="fn">WaitForSignalAsync</span>(token);
+
+    <span class="cmt">// 执行业务逻辑，写结果回 PLC</span>
+    <span class="type">Task</span> <span class="fn">ExecuteActionAsync</span>(token);
+}</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ Diag ═══════════════════════════════════════ -->
+  <section class="section" id="diag">
+    <div class="section-header">
+      <span class="section-num">05</span>
+      <h2>五层诊断体系</h2>
+      <span class="line"></span>
+    </div>
+
+    <div class="detail-block">
+      <div class="diag-flow">
+        <div class="diag-step"><small>L1 物理层</small>ping PLC_IP</div>
+        <div class="diag-arrow">→</div>
+        <div class="diag-step"><small>L2 连接层</small>ConnectionState</div>
+        <div class="diag-arrow">→</div>
+        <div class="diag-step"><small>L3 心跳层</small>心跳值变化?</div>
+        <div class="diag-arrow">→</div>
+        <div class="diag-step"><small>L4 信号层</small>单信号读写</div>
+        <div class="diag-arrow">→</div>
+        <div class="diag-step"><small>L5 逻辑层</small>StationState</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="detail-block">
+        <h3>常见问题速查</h3>
+        <table class="info-table">
+          <tr><th>现象</th><th>最可能原因</th><th>检查</th></tr>
+          <tr><td>所有工站停摆</td><td>全局心跳丢失</td><td>PLC 连接状态，ping 测试</td></tr>
+          <tr><td>某通道不触发</td><td>触发信号未置位</td><td>PLC 在线监控触发寄存器值</td></tr>
+          <tr><td>扫码无反应</td><td>电芯码寄存器未更新</td><td>检查 Scan() 调用和 D 区值</td></tr>
+          <tr><td>分流不动作</td><td>检测结果未查到</td><td>SQL Server 连接，BlueFilm 表</td></tr>
+          <tr><td>MOM 查单失败</td><td>网络不通或服务不可用</td><td>MomCircuitBreaker 状态</td></tr>
+          <tr><td>连接频繁断开</td><td>FINS 节点号冲突</td><td>检查 SA1/DA1 配置</td></tr>
+        </table>
+      </div>
+      <div class="detail-block">
+        <h3>诊断命令示例</h3>
+        <div class="code-block">
+          <pre><span class="cmt"># L1 — 物理连接</span>
+ping 192.168.1.11
+telnet 192.168.1.11 9600
+
+<span class="cmt"># L3 — 心跳检查</span>
+<span class="kw">var</span> val = <span class="fn">TryGetLatestByName</span>(
+    <span class="str">"PLC心跳获取"</span>);
+<span class="cmt">// 值应在 0 和 1 之间周期性变化</span>
+
+<span class="cmt"># L4 — 单信号读取</span>
+<span class="kw">var</span> trigger = <span class="fn">ReadOnceByNameAsync</span>(
+    <span class="str">"PLC通道1来料触发"</span>);
+<span class="cmt">// 应为 1（有料）或 0（无料）</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ Signals ════════════════════════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">06</span>
+      <h2>信号定义规范</h2>
+      <span class="line"></span>
+    </div>
+
+    <div class="detail-block">
+      <h3>CSV 格式 (signals_config.csv)</h3>
+      <table class="info-table">
+        <tr><th>列</th><th>含义</th><th>示例</th><th>说明</th></tr>
+        <tr><td>Address</td><td>PLC 地址</td><td class="mono">D1002</td><td>品牌相关，见 §5</td></tr>
+        <tr><td>DataType</td><td>数据类型</td><td class="mono">UShort</td><td>见类型映射表</td></tr>
+        <tr><td>Name</td><td>信号名</td><td>PLC通道1来料触发</td><td>中文，遵循命名规范</td></tr>
+        <tr><td>Description</td><td>用途说明</td><td>来料工位触发，PLC→PC，1=有料</td><td>自由文本</td></tr>
+        <tr><td>PlcId</td><td>所属 PLC</td><td class="mono">omron_1</td><td>对应 plc_config.json 的 Id</td></tr>
+        <tr><td>Direction</td><td>读写方向</td><td class="mono">R</td><td>R=PLC→PC, W=PC→PLC, RW</td></tr>
+        <tr><td>Group</td><td>功能分组</td><td>来料</td><td>便于分类索引</td></tr>
+      </table>
+    </div>
+
+    <div class="two-col">
+      <div class="detail-block">
+        <h3>命名规范</h3>
+        <div class="code-block">
+          <pre>PLC通道{N}{功能}{动作}
+
+PLC通道1来料触发
+PLC通道1来料电芯码
+PLC通道1来料结果
+PLC通道1来料复投触发
+PLC通道1来料复投信息
+PLC通道2分流触发
+PLC通道2分流电芯码
+PLC通道2分流NG状态
+PLC通道2分流出站结果
+PLC心跳获取
+PLC心跳响应
+出站心跳
+视觉工控机1更新触发
+视觉工控机1更新响应</pre>
+        </div>
+      </div>
+      <div class="detail-block">
+        <h3>配置驱动示例</h3>
+        <div class="code-block">
+          <pre><span class="cmt">// 业务代码不写地址，按名称访问</span>
+<span class="kw">var</span> trigger = _owner.<span class="fn">GetInt_Plc</span>(
+    <span class="str">$"PLC通道{_channelNo}来料触发"</span>);
+
+<span class="kw">var</span> barcode = _owner.<span class="fn">GetString_Plc</span>(
+    <span class="str">$"PLC通道{_channelNo}来料电芯码"</span>);
+
+_owner.<span class="fn">SetInt_Plc</span>(
+    <span class="str">$"PLC通道{_channelNo}来料结果"</span>, 1);
+
+<span class="cmt">// 地址变更只需改 CSV，代码不动</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ Simulation ═════════════════════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">07</span>
+      <h2>模拟与测试</h2>
+      <span class="line"></span>
+    </div>
+
+    <div class="two-col">
+      <div class="detail-block">
+        <h3>无硬件开发模式</h3>
+        <p>
+          <code>App.config</code> 中设置 <code>SimulationMode=true</code>，
+          SimulationDataGenerator 周期性生成假数据写入 SQLite，模拟电芯码以 <code>SIM</code> 前缀标识。
+        </p>
+        <p>
+          本地测试 PLC 配置使用 127.0.0.1 回环地址，配合软 PLC 或模拟器。
+          PlcChannel 连接失败时不崩溃，进入自动重连循环。
+        </p>
+      </div>
+      <div class="detail-block">
+        <h3>测试策略</h3>
+        <table class="info-table">
+          <tr><th>测试对象</th><th>方式</th></tr>
+          <tr><td>SignalReader 类型分发</td><td>Mock IPlcConnection，验证各类型 Read&lt;T&gt; 调用</td></tr>
+          <tr><td>PlcChannel 重连逻辑</td><td>Mock 连接断开，验证重试次数和间隔</td></tr>
+          <tr><td>Station 状态流转</td><td>Mock IStationHandler，验证循环逻辑</td></tr>
+          <tr><td>配置加载</td><td>测试 JSON/CSV 解析结果</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ Files ═════════════════════════════════════ -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">08</span>
+      <h2>文件清单</h2>
+      <span class="line"></span>
+    </div>
+
+    <div class="card-grid">
+      <div class="card c-blue">
+        <div class="card-icon" style="font-size:14px;">.md</div>
+        <div class="card-name">ELECTRICAL.md</div>
+        <div class="card-phase">知识库文档</div>
+        <div class="card-desc">
+          7 章泛用架构模式 + 附录 A 参考实现。Claude Code 会话自动加载，所有 PLC 相关开发的权威参考。
+        </div>
+      </div>
+      <div class="card c-green">
+        <div class="card-icon" style="font-size:14px;">.md</div>
+        <div class="card-name">plc-dev/SKILL.md</div>
+        <div class="card-phase">Claude Code 技能定义</div>
+        <div class="card-desc">
+          6 个子命令的完整行为规范：路由规则、输入输出格式、代码模板、边界处理。
+        </div>
+      </div>
+      <div class="card c-amber">
+        <div class="card-icon" style="font-size:14px;">.html</div>
+        <div class="card-name">plc-dev-overview.html</div>
+        <div class="card-phase">离线介绍页面</div>
+        <div class="card-desc">
+          无需服务器的独立 HTML 页面，适合工厂现场大屏展示或离线分发。
+        </div>
+      </div>
+    </div>
+  </section>
 
 </div>
+
+<!-- ══ Footer ═════════════════════════════════════ -->
+<footer class="footer">
+  <div class="f-stat"><span class="f-val">6</span> 命令</div>
+  <div class="f-stat"><span class="f-val">4</span> PLC 品牌</div>
+  <div class="f-stat"><span class="f-val">7</span> 章架构文档</div>
+  <div class="f-stat"><span class="f-val">5</span> 层诊断</div>
+  <div class="f-stat"><span class="f-val">7</span> 列 CSV 信号规范</div>
+  <div class="f-note">ELECTRICAL.md · /plc-dev SKILL.md · 2026-06-13 · offline-ready</div>
+</footer>
 
 </body>
 </html>
