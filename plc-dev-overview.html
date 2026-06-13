@@ -522,10 +522,11 @@
 <nav class="topnav">
   <span class="logo"><span class="slash">/</span><span class="cmd">plc-dev</span></span>
   <a href="#commands">命令</a>
+  <a href="#workflow">工作流</a>
+  <a href="#automaton">自动机</a>
   <a href="#brands">品牌</a>
   <a href="#arch">架构</a>
   <a href="#diag">诊断</a>
-  <a href="#workflow">工作流</a>
   <span class="version">v1.0 · ELECTRICAL.md</span>
 </nav>
 
@@ -720,13 +721,143 @@
     </div>
   </section>
 
+  <!-- ══ Automaton — 工站自动机 ══════════════════════ -->
+  <section class="section" id="automaton">
+    <div class="section-header">
+      <span class="section-num">03</span>
+      <h2>工站自动机 — 写工位的唯一范式</h2>
+      <span class="line"></span>
+    </div>
+
+    <div class="detail-block">
+      <h3>你只需要实现 3 个方法</h3>
+      <p class="sub">PLCHandler 已经封装了通信。开发者唯一要做的事：实现 IStationHandler 接口</p>
+
+      <div class="code-block">
+        <pre><span class="kw">public interface</span> <span class="type">IStationHandler</span>
+{
+    <span class="cmt">// ① 检查心跳 — 读任意已知信号验证连接存活</span>
+    <span class="type">Task</span>&lt;<span class="kw">bool</span>&gt; <span class="fn">CheckHeartbeatAsync</span>(<span class="type">CancellationToken</span> token);
+
+    <span class="cmt">// ② 等待触发 — 轮询 PLC 触发寄存器直到值=1</span>
+    <span class="type">Task</span>&lt;<span class="kw">bool</span>&gt; <span class="fn">WaitForSignalAsync</span>(<span class="type">CancellationToken</span> token);
+
+    <span class="cmt">// ③ 执行业务 — 读数据→调服务→写结果→持久化</span>
+    <span class="type">Task</span> <span class="fn">ExecuteActionAsync</span>(<span class="type">CancellationToken</span> token);
+}</pre>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="detail-block">
+        <h3>引擎循环（Station.RunAsync）</h3>
+        <p class="sub">每个工站独立 Task.Run，引擎循环固定不变</p>
+        <div class="code-block">
+          <pre><span class="kw">while</span> (!token.IsCancellationRequested)
+{
+    <span class="cmt">// 全局心跳丢失 → 暂停此站</span>
+    <span class="kw">if</span> (_globalPaused) { delay 1s; <span class="kw">continue</span>; }
+
+    <span class="cmt">// Step 1</span>
+    <span class="kw">await</span> handler.<span class="fn">CheckHeartbeatAsync</span>(token);
+
+    <span class="cmt">// Step 2</span>
+    <span class="kw">if</span> (!<span class="kw">await</span> handler.<span class="fn">WaitForSignalAsync</span>(token))
+        <span class="kw">continue</span>;
+
+    <span class="cmt">// Step 3</span>
+    <span class="kw">await</span> handler.<span class="fn">ExecuteActionAsync</span>(token);
+}</pre>
+        </div>
+      </div>
+      <div class="detail-block">
+        <h3>全局心跳：全部工站的统一开关</h3>
+        <div class="diag-flow" style="justify-content:flex-start; gap:12px;">
+          <div class="diag-step" style="background:var(--green-bg);border-color:rgba(30,138,94,0.25);">
+            Healthy<small>正常运行</small>
+          </div>
+          <div class="diag-arrow">心跳丢失→</div>
+          <div class="diag-step" style="background:var(--red-bg);border-color:rgba(209,69,59,0.25);">
+            Lost<small>全部暂停</small>
+          </div>
+          <div class="diag-arrow">心跳恢复→</div>
+          <div class="diag-step" style="background:var(--amber-bg);border-color:rgba(194,122,14,0.25);">
+            Recovering<small>确认2秒</small>
+          </div>
+          <div class="diag-arrow">稳定→</div>
+          <div class="diag-step" style="background:var(--green-bg);border-color:rgba(30,138,94,0.25);">
+            Healthy<small>恢复运行</small>
+          </div>
+        </div>
+        <p style="margin-top:14px;">
+          一个 PLC 失联 → 所有通道、所有工站同时暂停。心跳恢复后等待 2 秒确认稳定再重启。
+          这是产线安全的核心机制，防止半失联状态下的误动作。
+        </p>
+      </div>
+    </div>
+
+    <div class="detail-block">
+      <h3>8 工站架构全景</h3>
+      <p class="sub">4 通道 × (来料 + 分流) = 8 个 Station，各自 Task.Run，通过 CancellationTokenSource 统一启停</p>
+
+      <table class="info-table">
+        <tr><th>通道</th><th>来料 Station (omron_1)</th><th>分流 Station (omron_2)</th><th>Station ID</th></tr>
+        <tr><td>通道 1</td><td>ProductArriveStationHandler(owner, 1)</td><td>ProductLeadStationHandler(owner, 1)</td><td>1, 2</td></tr>
+        <tr><td>通道 2</td><td>ProductArriveStationHandler(owner, 2)</td><td>ProductLeadStationHandler(owner, 2)</td><td>3, 4</td></tr>
+        <tr><td>通道 3</td><td>ProductArriveStationHandler(owner, 3)</td><td>ProductLeadStationHandler(owner, 3)</td><td>5, 6</td></tr>
+        <tr><td>通道 4</td><td>ProductArriveStationHandler(owner, 4)</td><td>ProductLeadStationHandler(owner, 4)</td><td>7, 8</td></tr>
+      </table>
+    </div>
+
+    <div class="two-col">
+      <div class="detail-block">
+        <h3>State → UI 实时反馈</h3>
+        <p class="sub">Station 状态变化通过委托推送到监控面板</p>
+        <table class="info-table">
+          <tr><th>State</th><th>含义</th><th>UI 指示</th></tr>
+          <tr><td>Idle</td><td>空闲，等待下一循环</td><td>灰灯</td></tr>
+          <tr><td>Checking</td><td>心跳检查中</td><td>蓝灯闪烁</td></tr>
+          <tr><td>Waiting</td><td>等待 PLC 触发信号</td><td>黄灯</td></tr>
+          <tr><td>Processing</td><td>执行业务逻辑中</td><td>绿灯</td></tr>
+          <tr><td>Paused</td><td>全局心跳丢失，暂停</td><td>红灯闪烁</td></tr>
+          <tr><td>Error</td><td>异常，冷却 2s 后恢复</td><td>红灯常亮</td></tr>
+        </table>
+      </div>
+      <div class="detail-block">
+        <h3>PLC 读写封装 — 只走 AutoRun</h3>
+        <p class="sub">Station Handler 不直接操作 PlcMonitor</p>
+        <div class="code-block">
+          <pre><span class="cmt">// Handler 中读写 PLC 的唯二方式</span>
+<span class="kw">var</span> code = _owner.<span class="fn">GetString_Plc</span>(
+    <span class="str">$"PLC通道{_channelNo}来料电芯码"</span>);
+
+_owner.<span class="fn">SetInt_Plc</span>(
+    <span class="str">$"PLC通道{_channelNo}来料结果"</span>, 1);
+
+<span class="cmt">// 所有 _Plc 后缀方法 = 线程安全
+// 内部 Monitor.Enter(_plcLock)</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-block">
+      <h3>新增工位 — 标准 6 步流程</h3>
+      <ol class="steps-list">
+        <li><strong>flowchart</strong> — 输入需求描述，生成 Mermaid 时序图 + 状态迁移图</li>
+        <li><strong>define-signals</strong> — 从流程图提取信号，写入 signals_config.csv</li>
+        <li><strong>gen-station</strong> — 生成 IStationHandler 实现代码骨架</li>
+        <li><strong>AutoRun.Init() 注册</strong> — <code>new Station(owner, id, name, handler, onStateChanged)</code></li>
+        <li><strong>validate</strong> — 校验信号名一致性</li>
+        <li><strong>diag</strong> — 部署后诊断确认运行正常</li>
+      </ol>
+    </div>
+  </section>
+
   <!-- ══ Brands ═════════════════════════════════════ -->
   <section class="section" id="brands">
     <div class="section-header">
       <span class="section-num">03</span>
       <h2>品牌支持</h2>
-      <span class="line"></span>
-    </div>
 
     <div class="brand-bar">
       <div class="brand">

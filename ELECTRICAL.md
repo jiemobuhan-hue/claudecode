@@ -153,48 +153,355 @@ sequenceDiagram
 
 ---
 
-## §4 工位状态机
+## §4 工位自动机 — 核心开发框架
 
-### IStationHandler 接口
+这是上位机对接 PLC 的核心：**不是怎么连 PLC，而是怎么组织工站业务逻辑**。
+PLCHandler 封装了通信细节，开发者只需实现 `IStationHandler` 接口即可。
+
+### 4.1 架构全景
+
+```
+AutoRun (产线自动化核心)
+├── 全局心跳管理 (GlobalHeartbeatState)
+│   ├── Healthy    → 心跳正常，所有工站运行
+│   ├── Lost       → 心跳丢失，暂停所有工站
+│   └── Recovering → 心跳恢复，等待 2s 确认稳定
+│
+├── CancellationTokenSource (_cts)
+│   └── 统一控制 8 个 Station 的启停
+│
+├── PlcMonitor (_monitor)
+│   └── 按名称读写 PLC 信号的统一入口
+│
+└── 8 × Station (各自 Task.Run)
+    ├── 通道1: Station(1, ProductArriveStationHandler)  ← 来料
+    │         Station(2, ProductLeadStationHandler)     ← 分流
+    ├── 通道2: Station(3, ProductArriveStationHandler)
+    │         Station(4, ProductLeadStationHandler)
+    ├── 通道3: Station(5, ProductArriveStationHandler)
+    │         Station(6, ProductLeadStationHandler)
+    └── 通道4: Station(7, ProductArriveStationHandler)
+              Station(8, ProductLeadStationHandler)
+```
+
+### 4.2 IStationHandler 接口 — 工站开发唯一入口
+
+任何新工站的开发只需要实现这三个方法：
 
 ```csharp
 public interface IStationHandler
 {
-    /// <summary>检查通道心跳，失败时抛异常暂停工站</summary>
+    /// <summary>
+    /// 检查通道心跳。读取一个已知存在的 PLC 信号。
+    /// 能读到值 → 连接正常 → 返回 true。
+    /// 读不到 → 抛异常或返回 false → Station 循环暂停此工站。
+    /// </summary>
     Task<bool> CheckHeartbeatAsync(CancellationToken token);
 
-    /// <summary>等待触发信号，超时返回 false</summary>
+    /// <summary>
+    /// 等待 PLC 触发信号。轮询读取触发寄存器，直到值变为 1。
+    /// 超时返回 false（Station 循环重新进入等待）。
+    /// token 被取消时立即返回 false。
+    /// </summary>
     Task<bool> WaitForSignalAsync(CancellationToken token);
 
-    /// <summary>执行业务逻辑，写结果回 PLC</summary>
+    /// <summary>
+    /// 执行完整的工站业务逻辑：
+    /// ① 读数据信号（电芯码、参数等）
+    /// ② 调用外部服务（MOM 查单、SQL Server 查检测结果）
+    /// ③ 写结果信号回 PLC
+    /// ④ 持久化数据到 SQLite
+    /// 异常处理、重试、降级逻辑全部在此方法内。
+    /// </summary>
     Task ExecuteActionAsync(CancellationToken token);
 }
 ```
 
-### Station 循环
+### 4.3 Station 主循环 — 引擎代码
+
+每 Station 在独立 `Task.Run` 中运行，引擎循环统一且不随工站变化：
+
+```csharp
+public class Station
+{
+    private readonly AutoRun _owner;
+    private readonly int _id;
+    private readonly string _name;
+    private readonly IStationHandler _handler;
+    private StationState _state;
+
+    public async Task RunAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            // ══ 全局心跳保护 ═══════════════════════
+            // 心跳丢失时暂停所有工站，由全局标志统一控制
+            if (_owner._globalPaused)
+            {
+                _state = StationState.Paused;
+                await Task.Delay(1000, token);
+                continue;
+            }
+
+            try
+            {
+                // ── Step 1: 心跳检查 ──────────────────
+                _state = StationState.Checking;
+                if (!await _handler.CheckHeartbeatAsync(token))
+                {
+                    await Task.Delay(500, token);
+                    continue;
+                }
+
+                // ── Step 2: 等待触发信号 ──────────────
+                _state = StationState.Waiting;
+                if (!await _handler.WaitForSignalAsync(token))
+                    continue;
+
+                // ── Step 3: 执行业务逻辑 ──────────────
+                _state = StationState.Processing;
+                await _handler.ExecuteActionAsync(token);
+
+                _state = StationState.Idle;
+            }
+            catch (OperationCanceledException)
+            {
+                break; // 正常停止
+            }
+            catch (Exception ex)
+            {
+                _state = StationState.Error;
+                Rlog.Error($"[{_name}] {ex.Message}");
+                await Task.Delay(2000, token); // 异常后冷却
+            }
+        }
+    }
+}
+```
+
+### 4.4 全局心跳 — 工站生命线
+
+不检查"每个通道的心跳"，而是检查"PLC 是否还活着"。一旦丢心跳，全部工站同时暂停。
+
+```csharp
+public enum GlobalHeartbeatState { Healthy, Lost, Recovering }
+
+// 主循环中：交替切换心跳响应值 (0↔1)
+// PLC 侧同时切换心跳获取值 (0↔1)
+// PC 检测 PLC 心跳获取值变化 → Healthy
+// PC 检测 PLC 心跳获取值不变 > 阈值 → 标记 Lost → _globalPaused = true
+// 心跳恢复后等待 _heartbeatRecoveringConfirmMs(默认2000ms) → Recovering → Healthy
+```
+
+心跳丢失条件：
+- `PlcMonitor` 检测到任一 PLC 连接断开
+- 连续 N 次读取心跳值无变化（默认阈值 3 次 × 1000ms 间隔 = 3s）
+
+心跳恢复条件：
+- 所有 PLC 重新连接
+- 心跳值恢复变化且稳定 2 秒
+
+### 4.5 来料 Station 实现（完整参考）
+
+```csharp
+private class ProductArriveStationHandler : AutoRun.IStationHandler
+{
+    private readonly AutoRun _owner;
+    private readonly int _channelNo;
+    public bool Processing { get; set; }
+
+    public ProductArriveStationHandler(AutoRun owner, int channelNo)
+    {
+        _owner = owner;
+        _channelNo = channelNo;
+    }
+
+    public async Task<bool> CheckHeartbeatAsync(CancellationToken token)
+    {
+        // 读取 PLC 的任意一个信号以验证连接
+        var val = _owner.GetInt_Plc($"PLC通道{_channelNo}来料触发");
+        return true; // GetInt_Plc 内部有异常处理，读到值说明 OK
+    }
+
+    public async Task<bool> WaitForSignalAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            var trigger = _owner.GetInt_Plc($"PLC通道{_channelNo}来料触发");
+            if (trigger == 1)
+            {
+                Processing = true;
+                return true;
+            }
+            await Task.Delay(100, token); // 100ms 轮询间隔
+        }
+        return false;
+    }
+
+    public async Task ExecuteActionAsync(CancellationToken token)
+    {
+        try
+        {
+            // ① 读电芯码
+            var cellCode = _owner.GetString_Plc($"PLC通道{_channelNo}来料电芯码");
+            if (string.IsNullOrEmpty(cellCode)) return;
+
+            // ② 检查是否为复投工件
+            var rework = _owner.GetInt_Plc($"PLC通道{_channelNo}来料复投触发");
+            if (rework == 1)
+            {
+                // 从 SQL Server 查询复投信息，写入 PLC
+                var reworkData = GetReworkInfo(cellCode);
+                _owner.SetShortArray_Plc($"PLC通道{_channelNo}来料复投信息", reworkData);
+            }
+
+            // ③ MOM 入站查单（韧性架构：熔断器 → 重试 → 离线队列）
+            var result = await CheckInWithMomAsync(cellCode);
+
+            // ④ 写结果回 PLC: 1=OK, 2=NG
+            _owner.SetInt_Plc($"PLC通道{_channelNo}来料结果", result);
+
+            // ⑤ 持久化到 SQLite
+            var cellData = new CellData { /* ... */ };
+            await SQLiteGenericHelper.I.BulkUpsertAsync(new[] { cellData });
+        }
+        finally
+        {
+            Processing = false;
+        }
+    }
+}
+```
+
+### 4.6 分流 Station 实现（完整参考）
+
+```csharp
+private class ProductLeadStationHandler : AutoRun.IStationHandler
+{
+    private readonly AutoRun _owner;
+    private readonly int _channelNo;
+    public bool Processing { get; set; }
+
+    public ProductLeadStationHandler(AutoRun owner, int channelNo) { ... }
+
+    public async Task<bool> CheckHeartbeatAsync(CancellationToken token)
+    {
+        _owner.GetInt_Plc($"PLC通道{_channelNo}分流触发");
+        return true;
+    }
+
+    public async Task<bool> WaitForSignalAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            if (_owner.GetInt_Plc($"PLC通道{_channelNo}分流触发") == 1)
+                return true;
+            await Task.Delay(100, token);
+        }
+        return false;
+    }
+
+    public async Task ExecuteActionAsync(CancellationToken token)
+    {
+        // ① 读电芯码
+        var cellCode = _owner.GetString_Plc($"PLC通道{_channelNo}分流电芯码");
+
+        // ② 本地查 CellData
+        var cellData = SQLiteGenericHelper.I.Query<CellData>(
+            "SELECT * FROM CellData WHERE 电芯码=@code", new { code = cellCode });
+
+        // ③ 远程查视觉检测结果 (SQL Server)
+        var detections = BlueFilmDetectionRepository.GetByCellCode(cellCode);
+
+        // ④ 视觉分拣算法
+        int way = GetDivertWay(detections); // 返回 1-4
+
+        // ⑤ 写分流结果
+        if (way > 0)
+        {
+            _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", way);
+            _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", way);
+        }
+        else
+        {
+            _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2); // NG
+            _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 2);
+        }
+    }
+}
+```
+
+### 4.7 新增工站的步骤模板
+
+当产线增加新工位时，按以下步骤操作：
 
 ```
-┌─────────────────────────────────────────┐
-│ while (!token.IsCancelled)              │
-│   if (全局心跳丢失) → delay 1s, continue │
-│   await handler.CheckHeartbeatAsync()   │
-│   await handler.WaitForSignalAsync()    │
-│   await handler.ExecuteActionAsync()    │
-└─────────────────────────────────────────┘
+Step 1: /plc-dev flowchart "新工位需求描述"
+        → 生成时序图 + 明确所有 PLC 信号
+
+Step 2: /plc-dev define-signals
+        → 从时序图提取信号，写入 signals_config.csv
+
+Step 3: /plc-dev gen-station --type Custom --channel N
+        → 生成 IStationHandler 骨架代码
+
+Step 4: 在 AutoRun.Init() 中注册新 Station:
+        var station = new Station(
+            owner: this,
+            id: nextId,
+            name: $"通道{N}{工位名}",
+            handler: new MyStationHandler(this, N),
+            onStateChanged: (id, state) => { /* UI 更新 */ }
+        );
+        _stations.Add(station);
+
+Step 5: /plc-dev validate
+        → 校验信号一致性
+
+Step 6: 部署 → /plc-dev diag 确认运行正常
 ```
 
-### 全局心跳机制
+### 4.8 Station State 与 UI 绑定
 
-- **GlobalHeartbeatState**: `Healthy → Lost → Recovering → Healthy`
-- 心跳丢失条件: 任一 PLC 连接断开 或 心跳值超过 N 秒未变化
-- Lost 时所有 Station 暂停（通过共享 `_globalPaused` 标志）
-- Recovering: 心跳恢复后等待 2 秒确认稳定，再切回 Healthy
+```csharp
+public enum StationState
+{
+    Idle,        // 空闲，等待下一个循环
+    Checking,    // 心跳检查中
+    Waiting,     // 等待 PLC 触发信号
+    Processing,  // 执行业务逻辑中
+    Paused,      // 全局心跳丢失，暂停
+    Error        // 异常，2 秒冷却后恢复
+}
+```
 
-### 多通道扩展
+状态变化通过 `Action<int, StationState>` 委托通知 UI 层（如 PLC 监控面板的状态灯）。
 
-- 每个物理通道（Channel 1-4）创建一组 Station: `{来料Station, 分流Station}`
-- 每 Station 独立 `Task.Run`，通过 `CancellationTokenSource` 统一启停
-- 来料 Station 只读 omron_1 信号，分流 Station 只读 omron_2 信号
+### 4.9 AutoRun 中的 PLC 读写封装
+
+所有 Station Handler 通过 `AutoRun` 的封装方法访问 PLC，不直接操作 `PlcMonitor`：
+
+| 方法 | 用途 | 线程安全 |
+|------|------|----------|
+| `GetIO(string name)` | 读 Bool 信号 | ✅ _plcLock |
+| `GetInt_Plc(string name)` | 读 UShort 信号 | ✅ |
+| `GetFloat_Plc(string name)` | 读 Float 信号 | ✅ |
+| `GetString_Plc(string name)` | 读 String 信号 | ✅ |
+| `SetIO(string name, bool val)` | 写 Bool 信号 | ✅ _plcLock |
+| `SetInt_Plc(string name, int val)` | 写 UShort 信号 | ✅ |
+| `SetString_Plc(string name, string val)` | 写 String 信号 | ✅ |
+| `SetInt(string name, int val)` | 写 Int 信号 | ✅ _plcLock |
+| `Sync(string name)` | 同步读取（穿透缓存） | ❌ 仅调试用 |
+
+命名约定：`_Plc` 后缀的方法是项目新增的线程安全封装，内部使用 `Monitor.Enter(_plcLock)` 保护。
+
+### 4.10 关键注意事项
+
+- **不要在 ExecuteActionAsync 中做长时间阻塞**。MOM 调用、数据库查询应有超时控制。长时间操作可考虑 `Task.Delay` 分段 + token 检查。
+- **Processing 标志**用于防止同一通道重复触发。在 `WaitForSignalAsync` 返回前设为 true，`ExecuteActionAsync` finally 中复位。
+- **全局心跳暂停**是共享状态，不要在 Station 内部修改 `_globalPaused`。
+- **线程安全**：所有 PLC 读写必须走 `_Plc` 后缀的封装方法。直接操作 `PlcMonitor` 会导致竞态。
+- **异常处理**在 Station.RunAsync 主循环中统一 catch，Handler 内部可以抛出让其自然冷却重试。
 
 ---
 
