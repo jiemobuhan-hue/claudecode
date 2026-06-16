@@ -490,16 +490,22 @@ namespace ZenergyBFSI.Model
             {
                 await SetInt_Plc("PLC心跳响应", 1);
                 await SetInt_Plc("出站心跳", 1);
-                Main.uC_StatesBar.uC_StatesBarVM.IsMomConnected = true;
-                Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = System.Windows.Media.Brushes.LimeGreen;
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    Main.uC_StatesBar.uC_StatesBarVM.IsMomConnected = true;
+                    Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = System.Windows.Media.Brushes.LimeGreen;
+                });
                 return true;
             }
             else
             {
                 await SetInt_Plc("PLC心跳响应", 0);
                 await SetInt_Plc("出站心跳", 0);
-                Main.uC_StatesBar.uC_StatesBarVM.IsMomConnected = false;
-                Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = System.Windows.Media.Brushes.Red;
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    Main.uC_StatesBar.uC_StatesBarVM.IsMomConnected = false;
+                    Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = System.Windows.Media.Brushes.Red;
+                });
                 return false;
             }
         }
