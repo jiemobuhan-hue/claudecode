@@ -30,7 +30,7 @@ namespace ViewModels
         public ObservableCollection<SignalDisplayItem> ActiveSignals
         {
             get => _activeSignals;
-            set => SetProperty(ref _activeSignals, value);
+            set { if (SetProperty(ref _activeSignals, value)) OnPropertyChanged(nameof(Signals)); }
         }
 
         public string SelectedPlcId
