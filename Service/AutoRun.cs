@@ -490,7 +490,7 @@ namespace ZenergyBFSI.Model
             {
                 await SetInt_Plc("PLC心跳响应", 1);
                 await SetInt_Plc("出站心跳", 1);
-                await Application.Current.Dispatcher.InvokeAsync(() =>
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     Main.uC_StatesBar.uC_StatesBarVM.IsMomConnected = true;
                     Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = System.Windows.Media.Brushes.LimeGreen;
@@ -501,7 +501,7 @@ namespace ZenergyBFSI.Model
             {
                 await SetInt_Plc("PLC心跳响应", 0);
                 await SetInt_Plc("出站心跳", 0);
-                await Application.Current.Dispatcher.InvokeAsync(() =>
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     Main.uC_StatesBar.uC_StatesBarVM.IsMomConnected = false;
                     Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = System.Windows.Media.Brushes.Red;
