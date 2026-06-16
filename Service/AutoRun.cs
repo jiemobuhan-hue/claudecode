@@ -222,6 +222,7 @@ namespace ZenergyBFSI.Model
                     try
                     {
                         signalDetected = await _handler.WaitForSignalAsync(token);
+                        //await _owner.SetInt_Plc($"PLC通道{1}分流NG状态", 2);
                     }
                     catch (OperationCanceledException)
                     {
@@ -368,7 +369,7 @@ namespace ZenergyBFSI.Model
                 try
                 {
                     // 心跳检测
-                    bool heartbeatOk = CheckGlobalHeartbeat();
+                    bool heartbeatOk = await CheckGlobalHeartbeatAsync();
 
                     if (!heartbeatOk)
                     {
@@ -420,9 +421,9 @@ namespace ZenergyBFSI.Model
         /// 所有工站共享此状态，心跳丢失时暂停所有工站
         /// </summary>
         /// <returns>设备是否在线</returns>
-        private bool CheckGlobalHeartbeat()
+        private async Task<bool> CheckGlobalHeartbeatAsync()
         {
-            bool deviceOk = DeviceLink();
+            bool deviceOk = await DeviceLinkAsync();
 
             if (deviceOk)
             {
@@ -433,7 +434,6 @@ namespace ZenergyBFSI.Model
                 }
                 else if (_heartbeatState == GlobalHeartbeatState.Recovering)
                 {
-                    // 检查恢复确认时间
                     if ((DateTime.Now - _heartbeatLostTime).TotalMilliseconds >= _heartbeatRecoveringConfirmMs)
                     {
                         _heartbeatState = GlobalHeartbeatState.Healthy;
@@ -484,35 +484,22 @@ namespace ZenergyBFSI.Model
         /// 设备链接状态检测 — 使用 PLCHandler 辅助工程
         /// 检查主 PLC (omron_1) 的连接状态，断联时只报警不影响其它流程
         /// </summary>
-        int heartloop = 0;
-        private bool DeviceLink()
+        private async Task<bool> DeviceLinkAsync()
         {
             if (_monitor != null && _monitor.IsConnected("omron_1") && _monitor.IsConnected("omron_2"))
             {
-                if(heartloop == 0)
-                {
-                    SetInt_Plc($"PLC心跳响应", 0);
-                    SetInt_Plc($"出站心跳", 0);
-                    Thread.Sleep(1000);
-                    heartloop = 1;
-                }
-                else
-                {
-                    SetInt_Plc($"PLC心跳响应", 1);
-                    SetInt_Plc($"出站心跳", 1);
-                    Thread.Sleep(1000);
-                    heartloop = 0;
-                }
-                
-      
+                await SetInt_Plc("PLC心跳响应", 1);
+                await SetInt_Plc("出站心跳", 1);
                 Main.uC_StatesBar.uC_StatesBarVM.IsMomConnected = true;
-                Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = Brushes.LimeGreen;
+                Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = System.Windows.Media.Brushes.LimeGreen;
                 return true;
             }
             else
             {
+                await SetInt_Plc("PLC心跳响应", 0);
+                await SetInt_Plc("出站心跳", 0);
                 Main.uC_StatesBar.uC_StatesBarVM.IsMomConnected = false;
-                Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = Brushes.Red;
+                Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = System.Windows.Media.Brushes.Red;
                 return false;
             }
         }
@@ -668,73 +655,7 @@ namespace ZenergyBFSI.Model
         /// <param name="data"></param>
         public void UpdateCellDataFromSQLserver(ref CellData data)
         {
-            #region 存储过程验证 — 验证完删除
-            {
-                var tag = $"SPTEST_{DateTime.Now:HHmmss}";
-                int ok = 0, fail = 0;
-                void Chk(string n, bool c) { if (c) ok++; else fail++; Rlog.Debug($"  [{(c ? "PASS" : "FAIL")}] {n}"); }
 
-                // ── T_BlueFilmDetection (2 SP) ──
-                var repoBFD = new BlueFilmDetectionRepository(CONNECTION_STRINGA);
-                var codeBFD = $"{tag}_BFD";
-                var numBfd = repoBFD.Insert(new T_BlueFilmDetection
-                {
-                    CellType = "T", CellCode = codeBFD, Reinvestment = 0,
-                    DetectionArea = "A", DetectionResults = "OK", NGtypeNum = 0,
-                    CreateTime = DateTime.Now
-                });
-                Chk("Proc_InsertBlueFilmDetection", numBfd != null);
-                Chk("PROC_GetBlueFilmDetection", repoBFD.GetByCellCode(codeBFD).Count > 0);
-                if (numBfd != null) repoBFD.Delete(numBfd.Value);
-
-                // ── T_BlueFilmDataMOM (2 SP) ──
-                var repoMOM = new BlueFilmDataMOMRepository(CONNECTION_STRINGA);
-                var codeMOM = $"{tag}_MOM";
-                var numMom = repoMOM.Insert(new T_BlueFilmDataMOM
-                {
-                    SideCellType = "T", CellCode = codeMOM,
-                    DetectionArea = "A", DetectionResults = "OK", NGtypeNum = 0,
-                    CreateTime = DateTime.Now,
-                    ParamterCode = "TEST_CODE",
-                    ParameterDesc = "测试缺陷#1-参数A",
-                    Value = "3.2",
-                    UpperLimit = "5.0",
-                    LowerLomit = "0.5",
-                    TargetValue = "2.0",
-                    Unit = "mm",
-                    ParameterResult = "OK"
-                });
-                Chk("PROC_Claude_InsertBlueFilmDataMOM", numMom != null);
-                Chk("PROC_Claude_GetBlueFilmDataMOM", repoMOM.GetByCellCode(codeMOM).Count > 0);
-                var momResult = repoMOM.GetByCellCode(codeMOM).FirstOrDefault();
-                Chk("  新列 ParamterCode", momResult != null && momResult.ParamterCode == "TEST_CODE");
-                Chk("  新列 ParameterDesc", momResult != null && momResult.ParameterDesc == "测试缺陷#1-参数A");
-                Chk("  新列 Value", momResult != null && momResult.Value == "3.2");
-                Chk("  新列 Unit", momResult != null && momResult.Unit == "mm");
-                Chk("  新列 ParameterResult", momResult != null && momResult.ParameterResult == "OK");
-                if (numMom != null) repoMOM.Delete(numMom.Value);
-
-                // ── T_BlueFilmRecipeParameters (6 SP) ──
-                var repoRP = new BlueFilmRecipeParametersRepository(CONNECTION_STRINGA);
-                var pid = $"{tag}_RP";
-                Chk("Proc_InsertBlueFilmRecipeParameters", repoRP.Insert(new T_BlueFilmRecipeParameters
-                {
-                    ParameterID = pid, ParameterName = "测试", ParameterType = "float",
-                    Description = "验证", Enable = 1, status = "启用",
-                    UpperSpecificationsLimit = "100", LowerSpecificationsLimit = "10",
-                    Unit = "ms", ACK = 1, UpdateTime = DateTime.Now
-                }) > 0);
-                var r = repoRP.GetByParameterID(pid);
-                Chk("GetByParameterID (sp)", r != null && r.ParameterName == "测试");
-                Chk("GetAll (sp)", repoRP.GetAll().Count > 0);
-                Chk("GetCount (sp)", repoRP.GetCount() > 0);
-                if (r != null) { r.Description = "UPD"; r.status = "禁用"; Chk("Update (sp)", repoRP.Update(r) > 0); }
-                Chk("Delete (sp)", repoRP.Delete(pid) > 0);
-                Chk("验证Delete (sp)", repoRP.GetByParameterID(pid) == null);
-
-                Rlog.Debug($"═══ SP验证完成: {ok}/{(ok + fail)} 通过 ═══");
-            }
-            #endregion
 
             // 收集该物料在所有工控机上的检测记录
             List<T_BlueFilmDetection> temp = new List<T_BlueFilmDetection>();
@@ -1468,31 +1389,56 @@ namespace ZenergyBFSI.Model
 
             public async Task<bool> WaitForSignalAsync(CancellationToken token)
             {
+                #region 旧代码
+                //var trigger = await _owner.GetInt_Plc($"PLC通道{_channelNo}来料触发");
+
+                //if (trigger <= 0)
+                //{
+                //    _state.Processing = false;
+                //    await _owner.SetInt_Plc($"PLC通道{_channelNo}来料结果", 0);
+                //    this._state.TriggerLast = 0;
+                //    return false;
+                //}
+
+                //return trigger == 1;
+                //if (trigger == _state.TriggerLast)
+                //{
+                //    _state.TriggerLast = trigger;
+                //    return false;
+                //}
+
+
+                //_state.TriggerLast = trigger;
+
+                //// 状态锁存：防止重复执行
+                //if (_state.Processing) return false;
+                //_state.Processing = true;
+
+                //return trigger == 1;
+                #endregion
+
                 var trigger = await _owner.GetInt_Plc($"PLC通道{_channelNo}来料触发");
-               
-                if (trigger <= 0) 
-                { 
+
+                if (trigger <= 0)
+                {
                     _state.Processing = false;
-                    await _owner.SetInt_Plc($"PLC通道{_channelNo}来料结果",0);
-                    this._state.TriggerLast = 0;
+                    _state.TriggerLast = 0;
+                    await _owner.SetInt_Plc($"PLC通道{_channelNo}来料结果", 0);
                     return false;
                 }
 
-                return trigger == 1;
                 if (trigger == _state.TriggerLast)
-                {
-                    _state.TriggerLast = trigger;
                     return false;
-                }
-                  
 
                 _state.TriggerLast = trigger;
 
-                // 状态锁存：防止重复执行
-                if (_state.Processing) return false;
+                if (_state.Processing)
+                    return false;
+
                 _state.Processing = true;
 
-                return trigger == 1;
+                return true;   // 任何 >0 的触发值都视为有效
+
             }
 
             public async Task ExecuteActionAsync(CancellationToken token)
@@ -1636,6 +1582,10 @@ namespace ZenergyBFSI.Model
                 finally
                 {
                     _state.Processing = false;
+
+                    AutoRun.I.LossCount = 0;
+                    AutoRun.I.Alarm("", 0);
+                    AutoRun.I.Init();
                 }
             }
         }
@@ -1675,32 +1625,63 @@ namespace ZenergyBFSI.Model
                 //_state.Processing = true;
 
                 //return true;
+                #region 旧代码
+                //var trigger = await _owner.GetInt_Plc($"PLC通道{_channelNo}分流触发");
 
+                //               if (trigger <= 0)
+                //               {
+                //                   _state.Processing = false;
+                //                   await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 0);
+                //                   await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 0);
+                //                   this._state.TriggerLast = trigger;
+                //                   return false;
+                //               }
+
+                //               //if (trigger == _state.TriggerLast)
+                //               //{
+                //               //    _state.TriggerLast = trigger;
+                //               //    return false;
+                //               //}
+
+
+                //               _state.TriggerLast = trigger;
+
+                //               // 状态锁存：防止重复执行
+                //               if (_state.Processing) return false;
+                //               _state.Processing = true;
+
+                //               return trigger == 1;
+                #endregion
                 var trigger = await _owner.GetInt_Plc($"PLC通道{_channelNo}分流触发");
 
+                // 1. 无效信号（0或负）：重置处理标志，清空PLC结果
                 if (trigger <= 0)
                 {
                     _state.Processing = false;
+                    _state.TriggerLast = 0;
                     await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 0);
                     await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 0);
-                    this._state.TriggerLast = trigger;
                     return false;
                 }
-                
-                //if (trigger == _state.TriggerLast)
-                //{
-                //    _state.TriggerLast = trigger;
-                //    return false;
-                //}
 
+                // 2. 边缘检测：值未变化 => 忽略
+                if (trigger == _state.TriggerLast)
+                {
+                    return false;
+                }
 
+                // 3. 记录新的触发值
                 _state.TriggerLast = trigger;
 
-                // 状态锁存：防止重复执行
-                if (_state.Processing) return false;
+                // 4. 防止重入（同一个信号正在处理中）
+                if (_state.Processing)
+                    return false;
+
+                // 5. 锁存
                 _state.Processing = true;
 
-                return trigger == 1;
+                // 6. 触发成功（如果你只需要 trigger==1 触发，可改为 return trigger == 1；这里直接返回 true）
+                return true;
             }
 
             public async Task ExecuteActionAsync(CancellationToken token)
@@ -1718,14 +1699,31 @@ namespace ZenergyBFSI.Model
                     }
                     
                         var t = SQLiteGenericHelper.QueryRaw<CellData>($"SELECT * from CellData WHERE 电芯码 = '{@tempcode}'", "CellData");
-                        var data = t.FirstOrDefault(i => i.电芯码 == tempcode); 
+                        var data = t.FirstOrDefault(i => i.电芯码 == tempcode);
+
+                    short[] shortArray = { 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+                    // 转换为大端字节数组（每个 short 占 2 字节）
+                    byte[] result = new byte[shortArray.Length * 2];
+                    for (int i = 0; i < shortArray.Length; i++)
+                    {
+                        byte[] bytes = BitConverter.GetBytes(shortArray[i]);
+                        if (BitConverter.IsLittleEndian)
+                            Array.Reverse(bytes);   // 转为大端
+                        Array.Copy(bytes, 0, result, i * 2, 2);
+                    }
+
+                    // 写入 PLC（地址应为字地址，如 DBW0）
+                    await _owner._monitor.WriteByNameAsync($"电芯{_channelNo}清洗状态", result);
+
                     if (data != null)
                     {
                         lock (_listDataLock)
                         {
                             try
                             {
-                                _owner.UpdateCellDataFromSQLserver(ref data);
+                                //_owner.UpdateCellDataFromSQLserver(ref data);
+
                             }catch(Exception ex)
                             {
 
@@ -1734,7 +1732,9 @@ namespace ZenergyBFSI.Model
                         }
 
                         int way = _owner.getlead(data);
-                        way = 1; // TODO: 后续移除硬编码
+                        way = 1; // TODO: 后续移除硬编码 
+                        int randnum = new Random(Guid.NewGuid().GetHashCode()).Next(1, 7);
+                        #region 随机复投和NG
                         switch (way)
                         {
                             case 1: data.视觉检测结果 = "结果一"; break;
@@ -1742,44 +1742,81 @@ namespace ZenergyBFSI.Model
                             case 3: data.视觉检测结果 = "结果三"; break;
                             case 4: data.视觉检测结果 = "结果四"; break;
                         }
-                        if (data.出站结果 == "OK")
-                        {
-                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", way);
-                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", way);
+                        if (randnum == 1)
+                        { 
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 7);
+                            Rlog.Info($"工位{_channelNo} 出料模拟OK{randnum}");
                         }
                         else
                         {
                             await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
-                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 2);
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 7);
+                            Rlog.Info($"工位{_channelNo} 出料模拟NG或复投{randnum}");
                         }
-    
+
+                        #endregion
+
+                        #region 真实数据
+
+                        //switch (way)
+                        //{
+                        //    case 1: data.视觉检测结果 = "结果一"; break;
+                        //    case 2: data.视觉检测结果 = "结果二"; break;
+                        //    case 3: data.视觉检测结果 = "结果三"; break;
+                        //    case 4: data.视觉检测结果 = "结果四"; break;
+                        //}
+                        //if (data.出站结果 == "OK")
+                        //{
+                        //    await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", way);
+                        //    await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", way);
+                        //}
+                        //else
+                        //{
+                        //    await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
+                        //    await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 2);
+                        //}
+                        #endregion
+
+
                         var temp = new List<CellData> { data };
                         SQLiteGenericHelper.BulkUpsert<CellData>(temp, "电芯码", "CellData");
-
-                        //string ngTypes = string.Join("|", new[]
-                        //{
-                        //    data.Ng类型1, data.Ng类型2, data.Ng类型3, data.Ng类型4,
-                        //    data.Ng类型5, data.Ng类型6, data.Ng类型7, data.Ng类型8
-                        //}.Where(s => !string.IsNullOrEmpty(s)));
-                        ////DashboardService.I.RecordExit(tempcode, "NG", ngTypes);
 
                         _state.LastCode = tempcode;
                         _state.LastProcessTime = DateTime.Now.Ticks;
                     }
                     else
                     {
-                        await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
-                        await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 2);
+                        int randnum2 = new Random(Guid.NewGuid().GetHashCode()).Next(1,7);
+                        //int randomNumber = _rnd.Value.Next(2, 100);
+
+                        if (randnum2 == 1)
+                        {
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 7);
+                            Rlog.Info($"工位{_channelNo} 出料模拟OK{randnum2}");
+                        }
+                        else
+                        {
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 7);
+                            Rlog.Info($"工位{_channelNo} 出料模拟NG或复投{randnum2}");
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
                     Rlog.Error($"工位{_channelNo} ProductLeadArrive异常: {ex.Message}");
                     _owner.Flag_Error++;
+
                 }
                 finally
                 {
                     _state.Processing = false;
+
+                    AutoRun.I.LossCount = 0;
+                    AutoRun.I.Alarm("", 0);
+                    AutoRun.I.Init();
                 }
             }
         }
