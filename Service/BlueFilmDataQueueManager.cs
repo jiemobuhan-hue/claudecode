@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using ZenergyBFSI.Model;
 using ZenergyBFSI.Model.Vision;
 using ZenergyBFSI.Service.CRUDServices;
+using System.Linq;
 
 namespace ZenergyBFSI.Service
 {
@@ -198,13 +199,180 @@ namespace ZenergyBFSI.Service
         //   #region RetryTimer     → Task 6
         // ═══════════════════════════════════════════════════════════
 
-        #pragma warning disable CS1998 // Async method lacks 'await' — 将在后续 Task 中实现
+        #region ReadConsumer — 异步读取三库视觉检测结果
+
+        /// <summary>
+        /// 读取消费者循环 — 从 _readQueue 取请求，查 3 库，聚合结果，通过 TCS 唤醒自动机
+        /// 空闲时 10ms 休眠避免 CPU 空转
+        /// </summary>
         private async Task ReadConsumerLoop(CancellationToken token)
         {
-            // 将在 Task 5 中实现
-            await Task.CompletedTask;
+            while (!token.IsCancellationRequested)
+            {
+                if (_readQueue.TryDequeue(out var request))
+                {
+                    try
+                    {
+                        var result = await ProcessReadRequestAsync(request);
+                        // 10s 整体超时保护
+                        if ((DateTime.Now - request.EnqueueTime).TotalSeconds > 10)
+                            result = new CellData { 电芯码 = request.CellCode, 出站结果 = "OK" };
+
+                        request.Completion.TrySetResult(result);
+                    }
+                    catch (Exception ex)
+                    {
+                        Rlog.Error($"[BlueFilmDataQueue] ReadConsumer 异常: {ex.Message}");
+                        // 确保不泄漏 TCS
+                        request.Completion.TrySetResult(
+                            new CellData { 电芯码 = request.CellCode, 出站结果 = "OK" });
+                    }
+                }
+                else
+                {
+                    await Task.Delay(10, token);
+                }
+            }
         }
 
+        /// <summary>
+        /// 处理单个读取请求 — 查本地 + 2 远程库，聚合 NG 缺陷
+        /// </summary>
+        private async Task<CellData> ProcessReadRequestAsync(DataReadRequest request)
+        {
+            var allRecords = new List<T_BlueFilmDetection>();
+            var result = new CellData
+            {
+                电芯码 = request.CellCode,
+                出站结果 = "OK",
+                Ng类型数量 = 0
+            };
+
+            // 1. 本地库查询（优先，超时 10s）
+            await QuerySingleDbAsync(
+                _detectionRepoLocal,
+                @"本地(DESKTOP-0F9L4KO\RJ)",
+                request.CellCode,
+                allRecords,
+                timeoutMs: 10000);
+
+            // 2. 远程库1 查询（3s 超时，独立异常隔离）
+            await QuerySingleDbAsync(
+                _detectionRepoRemote1,
+                "远程1(DESKTOP-NHDST87)",
+                request.CellCode,
+                allRecords,
+                timeoutMs: 3000);
+
+            // 3. 远程库2 查询（3s 超时，独立异常隔离）
+            await QuerySingleDbAsync(
+                _detectionRepoRemote2,
+                "远程2(DESKTOP-2ADDTIC)",
+                request.CellCode,
+                allRecords,
+                timeoutMs: 3000);
+
+            // 聚合 NG 缺陷到 CellData
+            if (allRecords.Count > 0)
+                AggregateDefects(ref result, allRecords);
+
+            return result;
+        }
+
+        /// <summary>
+        /// 查询单个数据库 — 超时隔离，异常不抛出
+        /// </summary>
+        private async Task QuerySingleDbAsync(
+            BlueFilmDetectionRepository repo,
+            string serverLabel,
+            string cellCode,
+            List<T_BlueFilmDetection> accumulator,
+            int timeoutMs)
+        {
+            using var cts = new CancellationTokenSource(timeoutMs);
+            try
+            {
+                var records = await Task.Run(() => repo.GetByCellCode(cellCode), cts.Token);
+                if (records != null && records.Count > 0)
+                {
+                    lock (accumulator)
+                        accumulator.AddRange(records);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Rlog.Warn($"[BlueFilmDataQueue] 查询超时 | 服务器: {serverLabel} | 电芯码: {cellCode} | 超时: {timeoutMs}ms");
+            }
+            catch (Exception ex)
+            {
+                Rlog.Error($"[BlueFilmDataQueue] 查询失败 | 服务器: {serverLabel} | 电芯码: {cellCode} | 异常: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 聚合 NG 缺陷 — 按 DetectionArea 分组，去重计数，填入 CellData.Ng类型1~8
+        /// 逻辑与 AutoRun.UpdateCellDataFromSQLserver 一致
+        /// </summary>
+        private void AggregateDefects(ref CellData data, List<T_BlueFilmDetection> records)
+        {
+            var areaGroups = records
+                .Where(t => t.DetectionResults != "OK"
+                    && !string.IsNullOrEmpty(t.DetectionArea))
+                .GroupBy(t => t.DetectionArea.Trim());
+
+            int ngIndex = 0;
+
+            foreach (var areaGroup in areaGroups)
+            {
+                if (ngIndex >= 8) break;
+
+                var defectCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var record in areaGroup)
+                {
+                    foreach (var ng in new[] { record.NGtype1, record.NGtype2, record.NGtype3 })
+                    {
+                        var ngVal = ng?.Trim();
+                        if (!string.IsNullOrEmpty(ngVal))
+                        {
+                            if (defectCounts.ContainsKey(ngVal))
+                                defectCounts[ngVal]++;
+                            else
+                                defectCounts[ngVal] = 1;
+                        }
+                    }
+                }
+
+                if (defectCounts.Count == 0) continue;
+
+                var defectStr = string.Join(",", defectCounts.Select(kv => $"{kv.Key}×{kv.Value}"));
+                var ngValue = $"{areaGroup.Key}外观缺陷{defectStr}";
+
+                SetNgField(ref data, ngIndex, ngValue);
+                ngIndex++;
+                data.出站结果 = "NG";
+            }
+
+            data.Ng类型数量 = ngIndex;
+        }
+
+        private static void SetNgField(ref CellData data, int index, string value)
+        {
+            switch (index)
+            {
+                case 0: data.Ng类型1 = value; break;
+                case 1: data.Ng类型2 = value; break;
+                case 2: data.Ng类型3 = value; break;
+                case 3: data.Ng类型4 = value; break;
+                case 4: data.Ng类型5 = value; break;
+                case 5: data.Ng类型6 = value; break;
+                case 6: data.Ng类型7 = value; break;
+                case 7: data.Ng类型8 = value; break;
+            }
+        }
+
+        #endregion
+
+        #pragma warning disable CS1998
         private async Task WriteDetectionConsumerLoop(CancellationToken token)
         {
             // 将在 Task 6 中实现
