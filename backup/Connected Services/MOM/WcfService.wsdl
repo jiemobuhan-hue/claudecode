@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wsdl:definitions xmlns:wsam="http://www.w3.org/2007/05/addressing/metadata" xmlns:wsx="http://schemas.xmlsoap.org/ws/2004/09/mex" xmlns:wsap="http://schemas.xmlsoap.org/ws/2004/08/addressing/policy" xmlns:msc="http://schemas.microsoft.com/ws/2005/12/wsdl/contract" xmlns:wsp="http://schemas.xmlsoap.org/ws/2004/09/policy" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd" xmlns:soap12="http://schemas.xmlsoap.org/wsdl/soap12/" xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:tns="http://tempuri.org/" xmlns:wsa10="http://www.w3.org/2005/08/addressing" xmlns:wsaw="http://www.w3.org/2006/05/addressing/wsdl" xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing" name="WcfService" targetNamespace="http://tempuri.org/" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">
+  <wsdl:types>
+    <xsd:schema targetNamespace="http://tempuri.org/Imports">
+      <xsd:import schemaLocation="http://10.6.33.3:8007/wcfhttpservice?xsd=xsd0" namespace="http://tempuri.org/" />
+      <xsd:import schemaLocation="http://10.6.33.3:8007/wcfhttpservice?xsd=xsd1" namespace="http://schemas.microsoft.com/2003/10/Serialization/" />
+      <xsd:import schemaLocation="http://10.6.33.3:8007/wcfhttpservice?xsd=xsd2" namespace="http://schemas.datacontract.org/2004/07/Apriso.MIPlugins.Communication.Core" />
+    </xsd:schema>
+  </wsdl:types>
+  <wsdl:message name="IWsWcfService_SendMessage_InputMessage">
+    <wsdl:part name="parameters" element="tns:SendMessage" />
+  </wsdl:message>
+  <wsdl:message name="IWsWcfService_SendMessage_OutputMessage">
+    <wsdl:part name="parameters" element="tns:SendMessageResponse" />
+  </wsdl:message>
+  <wsdl:message name="IWsWcfService_SendMessageJson_InputMessage">
+    <wsdl:part name="parameters" element="tns:SendMessageJson" />
+  </wsdl:message>
+  <wsdl:message name="IWsWcfService_SendMessageJson_OutputMessage">
+    <wsdl:part name="parameters" element="tns:SendMessageJsonResponse" />
+  </wsdl:message>
+  <wsdl:portType name="IWsWcfService">
+    <wsdl:operation name="SendMessage">
+      <wsdl:input wsaw:Action="http://tempuri.org/IWsWcfService/SendMessage" message="tns:IWsWcfService_SendMessage_InputMessage" />
+      <wsdl:output wsaw:Action="http://tempuri.org/IWsWcfService/SendMessageResponse" message="tns:IWsWcfService_SendMessage_OutputMessage" />
+    </wsdl:operation>
+    <wsdl:operation name="SendMessageJson">
+      <wsdl:input wsaw:Action="http://tempuri.org/IWsWcfService/SendMessageJson" message="tns:IWsWcfService_SendMessageJson_InputMessage" />
+      <wsdl:output wsaw:Action="http://tempuri.org/IWsWcfService/SendMessageJsonResponse" message="tns:IWsWcfService_SendMessageJson_OutputMessage" />
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="BasicHttpBinding_IWsWcfService" type="tns:IWsWcfService">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http" />
+    <wsdl:operation name="SendMessage">
+      <soap:operation soapAction="http://tempuri.org/IWsWcfService/SendMessage" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="SendMessageJson">
+      <soap:operation soapAction="http://tempuri.org/IWsWcfService/SendMessageJson" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="WcfService">
+    <wsdl:port name="BasicHttpBinding_IWsWcfService" binding="tns:BasicHttpBinding_IWsWcfService">
+      <soap:address location="http://10.6.33.3:8007/wcfhttpservice" />
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

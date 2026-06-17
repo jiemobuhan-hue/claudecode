@@ -1,0 +1,82 @@
+<h2>三层缺陷复判系统 — 架构总览</h2>
+<p class="subtitle">从产品列表 → 缺陷地图 → 单缺陷复判的递进流程</p>
+
+<div class="section">
+  <h3>数据流与层级关系</h3>
+  <div class="mockup">
+    <div class="mockup-header">三层架构 & 数据流</div>
+    <div class="mockup-body">
+      <div style="display:flex; gap:20px; align-items:center; justify-content:center; padding:20px; flex-wrap:wrap;">
+
+        <!-- Layer 1 -->
+        <div style="background:#1e293b; border:2px solid #38bdf8; border-radius:12px; padding:20px; width:240px; min-height:280px;">
+          <div style="color:#38bdf8; font-size:18px; font-weight:bold; margin-bottom:8px;">第1层 · 大面入口</div>
+          <div style="color:#94a3b8; font-size:13px; margin-bottom:12px;">原有卡片网格 + 缺陷统计</div>
+          <div style="background:#0f172a; border-radius:8px; padding:12px; margin-bottom:10px;">
+            <div class="placeholder" style="height:80px;">缩略图</div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <span style="background:#ef4444; color:white; padding:2px 8px; border-radius:4px; font-size:11px;">划痕×2</span>
+              <span style="background:#f97316; color:white; padding:2px 8px; border-radius:4px; font-size:11px;">凹坑×1</span>
+            </div>
+          </div>
+          <div style="color:#94a3b8; font-size:12px; text-align:center;">⬆ 点击卡片 → 进入第2层</div>
+        </div>
+
+        <div style="color:#38bdf8; font-size:24px;">→</div>
+
+        <!-- Layer 2 -->
+        <div style="background:#1e293b; border:2px solid #a78bfa; border-radius:12px; padding:20px; width:280px; min-height:280px;">
+          <div style="color:#a78bfa; font-size:18px; font-weight:bold; margin-bottom:8px;">第2层 · 缺陷地图</div>
+          <div style="color:#94a3b8; font-size:13px; margin-bottom:12px;">大图 + Canvas 标注 + 缺陷列表</div>
+          <div style="display:flex; gap:10px;">
+            <div style="background:#0f172a; border-radius:8px; padding:8px; flex:1;">
+              <div class="placeholder" style="height:100px;">大图 + 矩形标注</div>
+            </div>
+            <div style="background:#0f172a; border-radius:8px; padding:8px; width:100px;">
+              <div style="color:white; font-size:11px; font-weight:bold;">缺陷列表</div>
+              <div style="background:#ef444433; border:1px solid #ef4444; padding:4px 6px; border-radius:4px; margin-top:4px; font-size:10px; color:white;">划痕 92%</div>
+              <div style="background:#f9731633; border:1px solid #f97316; padding:4px 6px; border-radius:4px; margin-top:4px; font-size:10px; color:white;">凹坑 78%</div>
+            </div>
+          </div>
+          <div style="color:#94a3b8; font-size:12px; text-align:center; margin-top:8px;">⬆ 点击缺陷 → 进入第3层</div>
+        </div>
+
+        <div style="color:#a78bfa; font-size:24px;">→</div>
+
+        <!-- Layer 3 -->
+        <div style="background:#1e293b; border:2px solid #34d399; border-radius:12px; padding:20px; width:240px; min-height:280px;">
+          <div style="color:#34d399; font-size:18px; font-weight:bold; margin-bottom:8px;">第3层 · 缺陷复判</div>
+          <div style="color:#94a3b8; font-size:13px; margin-bottom:12px;">裁剪图 + 复判表单</div>
+          <div style="background:#0f172a; border-radius:8px; padding:12px;">
+            <div class="placeholder" style="height:80px;">缺陷裁剪图 300×300</div>
+            <div style="margin-top:8px; font-size:11px; color:white;">类型: 划痕 | 置信度: 92%</div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button class="mock-button" style="background:#22c55e; font-size:10px;">OK</button>
+              <button class="mock-button" style="background:#ef4444; font-size:10px;">NG</button>
+            </div>
+            <input class="mock-input" placeholder="操作员" style="margin-top:6px; font-size:10px;">
+          </div>
+          <div style="color:#94a3b8; font-size:12px; text-align:center; margin-top:8px;">⬆ 提交 → 返回第2层</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>关键设计决策点</h3>
+  <div style="display:flex; flex-direction:column; gap:12px;">
+    <div style="background:#1e293b; border-radius:8px; padding:16px;">
+      <div class="label">数据源</div>
+      <p style="margin:4px 0 0 0;">缺陷坐标从哪里来？当前 ImageRecord 只有整图 DefectBbox。需要确认是否已有缺陷检测数据表，还是需要新建。</p>
+    </div>
+    <div style="background:#1e293b; border-radius:8px; padding:16px;">
+      <div class="label">坐标系统</div>
+      <p style="margin:4px 0 0 0;">缺陷用像素坐标还是相对坐标(0-1)？这直接影响 Canvas 标注的位置换算。</p>
+    </div>
+    <div style="background:#1e293b; border-radius:8px; padding:16px;">
+      <div class="label">复用 vs 重写</div>
+      <p style="margin:4px 0 0 0;">GridOverlay 弹窗框架是否保留？还是整体重构为更清晰的三层结构？</p>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,123 @@
+<h2>PLC 开发技能包 — 重新设计</h2>
+<p class="subtitle">定位：可复用的上位机-PLC对接开发模板，当前项目作为参考实现</p>
+
+<div class="section">
+  <h3>ELECTRICAL.md — 架构模式文档（泛用）</h3>
+  <p style="color:#94a3b8; font-size:12px; margin-top:0;">不是"这个项目有什么信号"，而是"一个上位机项目该怎么组织PLC代码"</p>
+
+  <div style="display:flex; flex-direction:column; gap:10px;">
+
+    <div style="background:#1e293b; border-left:3px solid #38bdf8; border-radius:6px; padding:12px;">
+      <div style="color:#38bdf8; font-weight:bold; font-size:13px;">§1 架构模式</div>
+      <p style="color:#e2e8f0; margin:4px 0 0 0; font-size:12px;">
+        PlcMonitor → PlcChannel → IPlcConnection 三层抽象 · 品牌无关的连接工厂 · 信号读写统一接口 · Rx 推送模式 · 配置驱动 vs 代码驱动
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #a78bfa; border-radius:6px; padding:12px;">
+      <div style="color:#a78bfa; font-weight:bold; font-size:13px;">§2 信号定义规范</div>
+      <p style="color:#e2e8f0; margin:4px 0 0 0; font-size:12px;">
+        CSV/JSON 信号表模板 · 命名规范（功能_通道_动作）· 数据类型映射表 · 地址编码规则 · 读写方向约定
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #34d399; border-radius:6px; padding:12px;">
+      <div style="color:#34d399; font-weight:bold; font-size:13px;">§3 工位状态机模式</div>
+      <p style="color:#e2e8f0; margin:4px 0 0 0; font-size:12px;">
+        IStationHandler 接口契约 · 三步循环（心跳检测→信号等待→动作执行）· CTC 协调 · 全局心跳暂停 · 多通道扩展模板
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #f97316; border-radius:6px; padding:12px;">
+      <div style="color:#f97316; font-weight:bold; font-size:13px;">§4 品牌适配指南</div>
+      <p style="color:#e2e8f0; margin:4px 0 0 0; font-size:12px;">
+        Omron FINS / Siemens S7 / Modbus TCP / Mitsubishi Melsec · 各品牌连接参数模板 · 地址格式差异 · 已知限制
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #eab308; border-radius:6px; padding:12px;">
+      <div style="color:#eab308; font-weight:bold; font-size:13px;">§5 模拟与测试</div>
+      <p style="color:#e2e8f0; margin:4px 0 0 0; font-size:12px;">
+        无硬件调试方案 · SimulationMode 模式 · 模拟数据生成器 · PLC 信号模拟器 · 单元测试策略
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #ef4444; border-radius:6px; padding:12px;">
+      <div style="color:#ef4444; font-weight:bold; font-size:13px;">§6 故障排查</div>
+      <p style="color:#e2e8f0; margin:4px 0 0 0; font-size:12px;">
+        通用诊断流程（连接→心跳→信号→逻辑）· 常见问题速查 · 日志分析 · 抓包调试
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>当前项目信号表 — 独立附录</h3>
+  <p style="color:#94a3b8; font-size:12px; margin-top:0;">
+    当前项目的 50 个信号、2 台 PLC 的具体配置作为 ELECTRICAL.md 的附录 A，起到"参考实现"的作用，不和泛用模板混在一起。
+  </p>
+</div>
+
+<div class="section">
+  <h3>/plc-dev 技能 — 开发脚手架命令</h3>
+
+  <div class="mockup">
+    <div class="mockup-header">命令设计（泛用 + 项目内两种模式）</div>
+    <div class="mockup-body">
+      <table style="width:100%; border-collapse:collapse; color:#e2e8f0; font-size:12px;">
+        <tr style="border-bottom:1px solid #334155;">
+          <th style="text-align:left; padding:6px;">命令</th><th style="text-align:left; padding:6px;">适用场景</th><th style="text-align:left; padding:6px;">功能</th>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:6px; font-family:monospace; color:#38bdf8;">scaffold</td>
+          <td style="padding:6px;">新项目</td>
+          <td style="padding:6px; font-size:11px;">生成 PLC 通信层项目骨架：连接工厂 + 信号读器 + 配置模板 + 心跳</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:6px; font-family:monospace; color:#38bdf8;">add-plc</td>
+          <td style="padding:6px;">新项目 / 现有项目</td>
+          <td style="padding:6px; font-size:11px;">引导式新增 PLC 设备：选品牌 → 填 IP → 自动生成配置和连接代码</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:6px; font-family:monospace; color:#38bdf8;">add-signal</td>
+          <td style="padding:6px;">现有项目</td>
+          <td style="padding:6px; font-size:11px;">引导式新增信号：选 PLC → 选地址 → 命名 → 更新 CSV → 更新代码引用</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:6px; font-family:monospace; color:#38bdf8;">gen-station</td>
+          <td style="padding:6px;">现有项目</td>
+          <td style="padding:6px; font-size:11px;">基于信号名生成 IStationHandler 工位代码模板：心跳检查 + 信号等待 + 动作执行</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:6px; font-family:monospace; color:#38bdf8;">validate</td>
+          <td style="padding:6px;">现有项目</td>
+          <td style="padding:6px; font-size:11px;">校验信号配置完整性：CSV 与代码引用一致性 · 地址冲突 · 缺失读写</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:6px; font-family:monospace; color:#38bdf8;">diag</td>
+          <td style="padding:6px;">现有项目</td>
+          <td style="padding:6px; font-size:11px;">交互式故障排查：连接→心跳→信号→工位 逐层检查</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>与现有项目的关系</h3>
+  <div style="display:flex; gap:12px;">
+    <div style="flex:1; background:#1e293b; border:1px solid #334155; border-radius:8px; padding:14px;">
+      <div class="label">ELECTRICAL.md</div>
+      <p style="color:#e2e8f0; font-size:12px; margin-top:6px;">泛用架构模式 + 规范 + 模板。<b>任何新项目的第一份电气文档。</b></p>
+    </div>
+    <div style="flex:1; background:#1e293b; border:1px solid #334155; border-radius:8px; padding:14px;">
+      <div class="label">本项目附录 A</div>
+      <p style="color:#e2e8f0; font-size:12px; margin-top:6px;">当前项目具体信号表、PLC IP、配置。作为"参考实现"证明模板可行。</p>
+    </div>
+    <div style="flex:1; background:#1e293b; border:1px solid #334155; border-radius:8px; padding:14px;">
+      <div class="label">/plc-dev 技能</div>
+      <p style="color:#e2e8f0; font-size:12px; margin-top:6px;">脚手架命令，读取 ELECTRICAL.md 模式后生成/校验代码。</p>
+    </div>
+  </div>
+</div>

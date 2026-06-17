@@ -6,6 +6,31 @@ using System.Threading.Tasks;
 
 namespace ZenergyBFSI.Model
 {
+    // ── 缺陷复判相关枚举与类 ──────────────────────────────────────
+
+    public enum ReviewStatus
+    {
+        Unreviewed,
+        OK,
+        NG
+    }
+
+    public class DefectRegion
+    {
+        public string DefectId { get; set; } = Guid.NewGuid().ToString("N");
+        public string DefectType { get; set; } = "";       // 划痕 / 凹坑 / 异物 / 气泡 / 其他
+        public double Confidence { get; set; }              // 0.0 ~ 1.0
+        public double X { get; set; }                       // 归一化坐标 0.0~1.0
+        public double Y { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
+        public ReviewStatus Status { get; set; } = ReviewStatus.Unreviewed;
+        public string ReviewUser { get; set; } = "";
+        public string ReviewComment { get; set; } = "";
+        public DateTime? ReviewTime { get; set; }
+        public string DefectImagePath { get; set; } = ""; // 缺陷专用图路径，为空则从原图裁剪
+    }
+
     public class InspectionUtils
     {
         // ── 看板数据 ──────────────────────────────────────────────────
@@ -37,12 +62,15 @@ namespace ZenergyBFSI.Model
             public int PageIndex { get; set; }
         }
 
+        #region [TASK-REFACTOR-005] HourlyData — 新增"检测中"统计 | 2026-05-15 | AI生成
         public class HourlyData
         {
-            public int Hour { get; set; } = 0;  // "08:00"
-            public int Ok { get; set; }
-            public int Ng { get; set; }
+            public int Hour { get; set; } = 0;     // 小时 (0~23 整数)
+            public int Ok { get; set; }             // 出站 OK
+            public int Ng { get; set; }             // 出站 NG
+            public int Pending { get; set; }        // 进站未完成（检测中）
         }
+        #endregion
 
         public class NgTypeData
         {
@@ -64,6 +92,7 @@ namespace ZenergyBFSI.Model
         // ── 复检页数据 ────────────────────────────────────────────────
         public class InspectionRecord
         {
+            public string Recordpath { get; set; } = "";
             public string RecordId { get; set; } = "";
             public string CellCode { get; set; } = "";
             public string DateTime { get; set; } = "";
@@ -91,6 +120,33 @@ namespace ZenergyBFSI.Model
             public string ManualTime { get; set; } = "";
             public string ManualUser { get; set; } = "";
             public string ManualComment { get; set; } = "";
+
+            public List<DefectRegion> Defects { get; set; } = new List<DefectRegion>();
+
+            private static readonly string[] _defaultDefectTypes = { "划痕", "凹坑", "异物" };
+            private static readonly Random _rng = new Random();
+
+            /// <summary>生成默认缺陷数据，视觉坐标就绪后替换为数据库查询</summary>
+            public static List<DefectRegion> GenerateDefaultDefects()
+            {
+                var defects = new List<DefectRegion>();
+                int count = _rng.Next(1, 4); // 1~3 个缺陷
+                for (int i = 0; i < count; i++)
+                {
+                    defects.Add(new DefectRegion
+                    {
+                        DefectId = Guid.NewGuid().ToString("N"),
+                        DefectType = _defaultDefectTypes[_rng.Next(_defaultDefectTypes.Length)],
+                        Confidence = Math.Round(0.7 + _rng.NextDouble() * 0.25, 2),
+                        X = Math.Round(0.1 + _rng.NextDouble() * 0.5, 2),   // 0.10~0.60
+                        Y = Math.Round(0.1 + _rng.NextDouble() * 0.5, 2),   // 0.10~0.60
+                        Width = Math.Round(0.05 + _rng.NextDouble() * 0.15, 2),  // 0.05~0.20
+                        Height = Math.Round(0.05 + _rng.NextDouble() * 0.10, 2), // 0.05~0.15
+                        Status = ReviewStatus.Unreviewed
+                    });
+                }
+                return defects;
+            }
         }
 
         // ── 事件参数 ──────────────────────────────────────────────────
@@ -107,6 +163,7 @@ namespace ZenergyBFSI.Model
         public class SaveReviewArgs : EventArgs
         {
             public string ImageId { get; set; } = "";
+            public string DefectId { get; set; } = "";  // 空字符串=整图复检，非空=缺陷级复检
             public string Result { get; set; } = "";  // "OK"|"NG"
             public string User { get; set; } = "";
             public string Comment { get; set; } = "";
@@ -142,7 +199,10 @@ namespace ZenergyBFSI.Model
                 Total = total;
                 Ok = ok;
                 Ng = ng;
-                YieldRate = total > 0 ? ok * 100.0 / total : 0;
+                #region [TASK-REFACTOR-001] 良率分母修正 | 2026-05-15 | AI生成
+                // 良率 = OK / (OK + NG)，分母仅含已完成检测的出站记录，进站记录不参与良率计算
+                YieldRate = (ok + ng) > 0 ? ok * 100.0 / (ok + ng) : 0;
+                #endregion
                 Hourly = hourly;
                 NgTypes = ngTypes;
                 Recent = recent;

@@ -1,0 +1,288 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Threading;
+using ZenergyBFSI.Model;
+using static ZenergyBFSI.Model.InspectionUtils;
+
+namespace ZenergyBFSI.Service
+{
+    public sealed class DashboardWorker : IDisposable
+    {
+        private readonly DispatcherTimer _timer;
+        private readonly TimeSpan _interval = TimeSpan.FromSeconds(5);
+        private readonly TimeSpan _timeWindow = TimeSpan.FromHours(12);
+
+        private int _pageIndex = 0;
+        public static int PageSize => 500;  // 统计粒度，统一供外部访问
+        private long _sequenceNumber = 0;
+        private bool _disposed = false;
+
+        private bool _isRunning = false;
+        private readonly object _runLock = new object();
+
+        #region [TASK-REFACTOR-001] 出站判定条件 | 2026-05-15 | AI生成
+        // 统一维护，消除 QueryAndParse / ParseRecords / KPI查询 中的重复定义
+        private const string OutboundCondition =
+            "(是否复投='是' OR 视觉检测参数一!='' OR 视觉检测参数二!='' OR 视觉检测参数三!='' OR 视觉检测参数四!='' OR 视觉检测参数五!='' OR 视觉检测参数六!='')";
+        #endregion
+
+        public event EventHandler<DashboardSnapshot> SnapshotReady;
+
+        public DashboardWorker()
+        {
+            _timer = new DispatcherTimer { Interval = _interval };
+            _timer.Tick += OnTimerTick;
+        }
+
+        public void Start()
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(DashboardWorker));
+            _timer.Start();
+            ExecuteQueryAsync();
+        }
+
+        public void Stop() { _timer.Stop(); }
+
+        public void SetPage(int pageIndex)
+        {
+            _pageIndex = pageIndex;
+            ExecuteQueryAsync();
+        }
+
+        /// <summary>
+        /// 手动触发看板刷新。调用后异步查询数据库，产生新的 DashboardSnapshot，
+        /// 通过 SnapshotReady 事件通知订阅者（DashboardService）。
+        /// </summary>
+        public void RequestRefresh() { ExecuteQueryAsync(); }
+
+        private void OnTimerTick(object sender, EventArgs e)
+        {
+            ExecuteQueryAsync();
+        }
+
+        private async void ExecuteQueryAsync()
+        {
+            lock (_runLock) { if (_isRunning) return; _isRunning = true; }
+            try
+            {
+                await Task.Run(() =>
+                {
+                    var snapshot = QueryAndParse();
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        SnapshotReady?.Invoke(this, snapshot);
+                    }));
+                });
+            }
+            finally { lock (_runLock) { _isRunning = false; } }
+        }
+
+        #region [TASK-REFACTOR-001] QueryAndParse — 统计与分页分离 | 2026-05-15 | AI生成
+        // ─────────────────────────────────────────────────────────────────
+        // 修复要点：
+        //   1. KPI 基于全窗口聚合查询，不再依赖分页 LIMIT 结果
+        //   2. 良率 = OK / (OK + NG)，分母仅含已完成检测的出站记录
+        //   3. 时段分布从全窗口出站记录聚合，每小时 OK/NG 独立统计
+        //   4. 最近记录 + NG类型仍使用分页查询结果（采样代表性足够）
+        // ─────────────────────────────────────────────────────────────────
+        private DashboardSnapshot QueryAndParse()
+        {
+            var now = DateTime.Now;
+            var windowStart = now - _timeWindow;
+            var windowStartStr = windowStart.ToString("yyyy/MM/dd HH:mm:ss");
+
+            // ① 窗口总记录数（含进站+出站），用于分页
+            var totalCountObj = SQLiteGenericHelper.ExecuteScalar<object>(
+                "SELECT COUNT(*) FROM CellData WHERE 进站时间 >= @p0", windowStartStr);
+            int totalCount = Convert.ToInt32(totalCountObj);
+
+            // ② KPI 聚合 — 全窗口，仅出站记录
+            var (totalOutbound, ok, ng) = QueryKpi(windowStartStr);
+
+            // ③ 时段分布 — 全窗口，出站记录按小时聚合 OK/NG
+            var hourly = QueryHourly(windowStartStr, windowStart);
+
+            // ④ 最近记录（分页）+ NG类型 — 来自当前页
+            int offset = _pageIndex * PageSize;
+            var records = SQLiteGenericHelper.QueryRaw<CellData>(
+                $@"SELECT * FROM CellData WHERE 进站时间 >= @p0 ORDER BY 进站时间 DESC LIMIT {PageSize} OFFSET {offset}",
+                windowStartStr);
+
+            var (ngTypes, recent) = ParsePageRecords(records);
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[DashboardWorker] 窗口总量={totalCount} 出站={totalOutbound} OK={ok} NG={ng} " +
+                $"良率={(totalOutbound > 0 ? ok * 100.0 / totalOutbound : 0):F1}% " +
+                $"当前页={records.Count}条");
+
+            Interlocked.Increment(ref _sequenceNumber);
+            return new DashboardSnapshot(
+                totalCount, ok, ng,            // Total=窗口总量, OK/NG=出站统计
+                hourly, ngTypes, recent,
+                totalCount, _pageIndex, PageSize,
+                _sequenceNumber);
+        }
+        #endregion
+
+        #region [TASK-REFACTOR-001] QueryKpi — 全窗口 KPI 聚合 | 2026-05-15 | AI生成
+        /// <summary>
+        /// 查询 12h 窗口内所有已完成检测的出站记录，统计 OK/NG 数量。
+        /// Total 返回出站总数（= OK + NG），用于良率计算。
+        /// </summary>
+        private (int totalOutbound, int ok, int ng) QueryKpi(string windowStartStr)
+        {
+            var okObj = SQLiteGenericHelper.ExecuteScalar<object>(
+                $"SELECT COUNT(*) FROM CellData WHERE 进站时间 >= @p0 AND {OutboundCondition} AND 出站结果 != 'NG'",
+                windowStartStr);
+            var ngObj = SQLiteGenericHelper.ExecuteScalar<object>(
+                $"SELECT COUNT(*) FROM CellData WHERE 进站时间 >= @p0 AND {OutboundCondition} AND 出站结果 = 'NG'",
+                windowStartStr);
+            int ok = Convert.ToInt32(okObj);
+            int ng = Convert.ToInt32(ngObj);
+            return (ok + ng, ok, ng);
+        }
+        #endregion
+
+        #region [TASK-REFACTOR-001] QueryHourly — 全窗口时段分布聚合 | 2026-05-15 | AI生成
+        /// <summary>
+        /// 查询 12h 窗口内所有出站记录的（进站时间, 出站结果），
+        /// 在 C# 端按小时分桶聚合 OK/NG，避免 SQLite 日期函数兼容问题。
+        /// </summary>
+        private List<HourlyData> QueryHourly(string windowStartStr, DateTime windowStart)
+        {
+            // 只查聚合所需两列，数据量远小于 SELECT *
+            var sources = SQLiteGenericHelper.QueryRaw<HourlySource>(
+                $"SELECT 进站时间, 出站结果 FROM CellData WHERE 进站时间 >= @p0 AND {OutboundCondition}",
+                windowStartStr);
+
+            // 初始化 12 个小时桶
+            var hourlyDict = new Dictionary<int, HourlyData>();
+            for (int i = 0; i < 12; i++)
+            {
+                var hour = (windowStart.Hour + i) % 24;
+                hourlyDict[hour] = new HourlyData { Hour = hour, Ok = 0, Ng = 0 };
+            }
+
+            foreach (var src in sources)
+            {
+                if (string.IsNullOrEmpty(src.进站时间)) continue;
+                if (!DateTime.TryParse(src.进站时间, out var dt)) continue;
+                if (!hourlyDict.TryGetValue(dt.Hour, out var bucket)) continue;
+
+                if (src.出站结果 == "NG")
+                    bucket.Ng++;
+                else
+                    bucket.Ok++;
+            }
+
+            return hourlyDict.Values.OrderBy(h => h.Hour).ToList();
+        }
+
+        /// <summary>时段聚合查询的轻量 DTO，仅包含聚合所需的两列。</summary>
+        private class HourlySource
+        {
+            public string 进站时间 { get; set; }
+            public string 出站结果 { get; set; }
+        }
+        #endregion
+
+        #region [TASK-REFACTOR-001] ParsePageRecords — 从当前页解析 NG类型 + 最近记录 | 2026-05-15 | AI生成
+        // ─────────────────────────────────────────────────────────────────
+        // KPI 和 Hourly 已由 QueryKpi / QueryHourly 基于全窗口独立查询，
+        // 此方法仅处理 NG类型（从当前页采样）和最近记录列表。
+        // 修复：进站记录 OverallResult 显示为 "检测中" 而非 "OK"。
+        // ─────────────────────────────────────────────────────────────────
+        private (List<NgTypeData> ngTypes, List<RecentRecord> recent)
+            ParsePageRecords(List<CellData> records)
+        {
+            // 出站判定 — 与 OutboundCondition 保持一致
+            bool IsOutbound(CellData c) =>
+                c.是否复投 == "是"
+                || !string.IsNullOrEmpty(c.视觉检测参数一)
+                || !string.IsNullOrEmpty(c.视觉检测参数二)
+                || !string.IsNullOrEmpty(c.视觉检测参数三)
+                || !string.IsNullOrEmpty(c.视觉检测参数四)
+                || !string.IsNullOrEmpty(c.视觉检测参数五)
+                || !string.IsNullOrEmpty(c.视觉检测参数六);
+
+            var outboundRecords = records.Where(IsOutbound).ToList();
+
+            // ── NG类型统计（当前页采样，代表性足够）──
+            var ngTypeCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var rec in outboundRecords.Where(c => c.出站结果 == "NG" || c.Ng类型数量 > 0))
+            {
+                var ngTypeList = new[]
+                {
+                    rec.Ng类型1, rec.Ng类型2, rec.Ng类型3, rec.Ng类型4,
+                    rec.Ng类型5, rec.Ng类型6, rec.Ng类型7, rec.Ng类型8
+                };
+                foreach (var ngType in ngTypeList)
+                {
+                    if (!string.IsNullOrEmpty(ngType))
+                    {
+                        ngTypeCounts.TryGetValue(ngType, out int cur);
+                        ngTypeCounts[ngType] = cur + 1;
+                    }
+                }
+            }
+            var ngTypes = ngTypeCounts
+                .OrderByDescending(kv => kv.Value)
+                .Take(8)
+                .Select(kv => new NgTypeData { Name = kv.Key, Count = kv.Value })
+                .ToList();
+
+            // ── 最近记录 ──
+            var recent = new List<RecentRecord>();
+            foreach (var rec in records)
+            {
+                bool outbound = IsOutbound(rec);
+                string overallResult;
+                if (!outbound)
+                    overallResult = "检测中";
+                else
+                    overallResult = rec.出站结果 == "NG" ? "NG" : "OK";
+
+                string ngTypesStr = "";
+                if (outbound && rec.Ng类型数量 > 0)
+                {
+                    var types = new[]
+                    {
+                        rec.Ng类型1, rec.Ng类型2, rec.Ng类型3, rec.Ng类型4,
+                        rec.Ng类型5, rec.Ng类型6, rec.Ng类型7, rec.Ng类型8
+                    }.Where(t => !string.IsNullOrEmpty(t)).ToArray();
+                    ngTypesStr = string.Join("|", types);
+                }
+
+                int processMs = 0;
+                if (outbound && DateTime.TryParse(rec.出站时间, out var exitTime)
+                    && DateTime.TryParse(rec.进站时间, out var enterTime))
+                {
+                    processMs = (int)(exitTime - enterTime).TotalMilliseconds;
+                }
+
+                recent.Add(new RecentRecord
+                {
+                    CellCode = rec.电芯码 ?? "",
+                    DateTime = rec.进站时间 ?? "",
+                    StationId = rec.检验位置 ?? "",
+                    OverallResult = overallResult,
+                    NgTypes = ngTypesStr,
+                    ProcessMs = processMs,
+                    IsInbound = !outbound
+                });
+            }
+
+            return (ngTypes, recent);
+        }
+        #endregion
+
+        public void Dispose()
+        {
+            _disposed = true;
+            _timer.Stop();
+        }
+    }
+}

@@ -1,0 +1,640 @@
+﻿<UserControl x:Class="ZenergyBFSI.View.StateCards.UC_InspectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
+             Background="{DynamicResource MaterialDesignBackground}"
+             xmlns:local="clr-namespace:ZenergyBFSI.View.StateCards"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800">
+    <!-- 三层 Grid：搜索栏 / 主内容 / 放大遮罩（ZIndex=100） -->
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ══ 搜索栏 ════════════════════════════════════════════ -->
+        <md:Card Grid.Row="0" Margin="12,12,12,6" Padding="12,9">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <!-- 标题 -->
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <!-- 竖分隔 -->
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="240"/>
+                    <!-- 电芯码 -->
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <!-- 日期标签 -->
+                    <ColumnDefinition Width="4"/>
+                    <ColumnDefinition Width="130"/>
+                    <!-- 起始 -->
+                    <ColumnDefinition Width="4"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <!-- 至 -->
+                    <ColumnDefinition Width="4"/>
+                    <ColumnDefinition Width="130"/>
+                    <!-- 结束 -->
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="90"/>
+                    <!-- 结果筛选 -->
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <!-- 搜索 -->
+                    <ColumnDefinition Width="4"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <!-- 清除 -->
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <!-- 结果数 -->
+                </Grid.ColumnDefinitions>
+
+                <!-- 标题 -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal"
+                              VerticalAlignment="Center">
+                    <md:PackIcon Kind="Magnify" Width="20" Height="20"  Margin="6,0,0,0"
+                                 Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                 VerticalAlignment="Center"/>
+                    <TextBlock Text="人工复检查询" FontSize="14" FontWeight="Medium" Margin="6,0,0,0"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <Separator Grid.Column="2" Style="{StaticResource MaterialDesignSeparator}"/>
+
+                <!-- 电芯码 -->
+                <TextBox Grid.Column="4" x:Name="TxtCellCode"
+                         md:HintAssist.Hint="电芯码（模糊搜索）"
+                         md:TextFieldAssist.HasClearButton="True"
+                         FontFamily="Consolas"
+                         KeyDown="TxtCellCode_KeyDown"/>
+
+                <!-- 日期范围 -->
+                <TextBlock Grid.Column="6" Text="日期" VerticalAlignment="Center"
+                           FontSize="12"
+                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                <DatePicker Grid.Column="8" x:Name="DpFrom"
+                            md:HintAssist.Hint="起始"/>
+                <TextBlock Grid.Column="10" Text="至" VerticalAlignment="Center"
+                           FontSize="12" Margin="4,0"
+                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                <DatePicker Grid.Column="12" x:Name="DpTo"
+                            md:HintAssist.Hint="结束"/>
+
+                <!-- 结果筛选 -->
+                <ComboBox Grid.Column="14" x:Name="CmbResult" SelectedIndex="0"
+                          md:HintAssist.Hint="判定">
+                    <ComboBoxItem Content="全部"/>
+                    <ComboBoxItem Content="OK"/>
+                    <ComboBoxItem Content="NG"/>
+                </ComboBox>
+
+                <!-- 搜索 & 清除 -->
+                <Button Grid.Column="16" x:Name="BtnSearch"
+                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        Padding="16,7" md:ButtonAssist.CornerRadius="6"
+                        Click="BtnSearch_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <md:PackIcon Kind="Magnify" Width="16" Height="16" Margin="4,0,0,0"
+                                     VerticalAlignment="Center"/>
+                        <TextBlock Text="搜索" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                    </StackPanel>
+                </Button>
+
+                <Button Grid.Column="18" x:Name="BtnClear"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Content="清除" Padding="12,7"
+                        md:ButtonAssist.CornerRadius="6"
+                        Click="BtnClear_Click"/>
+
+                <!-- 结果数 -->
+                <TextBlock Grid.Column="20" x:Name="TxtResultCount"
+                           Text="输入条件后搜索"
+                           FontSize="11" VerticalAlignment="Center"
+                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+            </Grid>
+        </md:Card>
+
+        <!-- ══ 主内容：左列表 + 右图片 ════════════════════════ -->
+        <Grid Grid.Row="1" Margin="12,0,12,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="280"/>
+                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ─ 左侧结果列表 ──────────────────────────────── -->
+            <md:Card Grid.Column="0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 列表 Header -->
+                    <Border Grid.Row="0" Padding="12,9"
+                            BorderThickness="0,0,0,1"
+                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                            Background="{DynamicResource MaterialDesignToolBarBackground}">
+                        <Grid>
+                            <TextBlock Text="搜索结果" FontSize="11"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtPageInfo" Text="-"
+                                       HorizontalAlignment="Right" VerticalAlignment="Center"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- 结果列表 -->
+                    <ListView Grid.Row="1" x:Name="LvRecords"
+                              SelectionChanged="LvRecords_SelectionChanged"
+                              BorderThickness="0"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem"
+                                   BasedOn="{StaticResource MaterialDesignListBoxItem}">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Padding" Value="10,9"/>
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <!-- 绑定 InspectionRecord -->
+                                <StackPanel  >
+                                    <!-- 电芯码 -->
+                                    <TextBlock Text="{Binding CellCode}"  Margin="4,0,0,0"
+                                               FontFamily="Consolas" FontSize="13"
+                                               FontWeight="Medium"
+                                               Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                    <!-- 时间 + 判定 -->
+                                    <Grid  Margin="4,0,0,0">
+                                        <TextBlock Text="{Binding DateTime}"
+                                                   FontFamily="Consolas" FontSize="10"
+                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                   VerticalAlignment="Center"/>
+                                        <Border HorizontalAlignment="Right"
+                                                CornerRadius="10" Padding="7,1"
+                                                VerticalAlignment="Center">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding OverallResult}" Value="OK">
+                                                            <Setter Property="Background" Value="#1A4CAF50"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding OverallResult}" Value="NG">
+                                                            <Setter Property="Background" Value="#1AF44336"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="{Binding OverallResult}"
+                                                       FontFamily="Consolas" FontSize="10"
+                                                       FontWeight="Bold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding OverallResult}" Value="OK">
+                                                                <Setter Property="Foreground" Value="#4CAF50"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding OverallResult}" Value="NG">
+                                                                <Setter Property="Foreground" Value="#F44336"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
+                                    </Grid>
+                                    <!-- NG 类型标签 -->
+                                    <ItemsControl  Margin="4,0,0,0" ItemsSource="{Binding NgTagList}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border CornerRadius="3" Margin="0,0,4,2"
+                                                        Background="#1AFFC107" Padding="5,1">
+                                                    <TextBlock Text="{Binding}" FontSize="9"
+                                                               Foreground="#FFC107"/>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+
+                    <!-- 分页 -->
+                    <Border Grid.Row="2" Padding="10,7"
+                            BorderThickness="0,1,0,0"
+                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                            Background="{DynamicResource MaterialDesignToolBarBackground}">
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Center" >
+                            <Button x:Name="BtnPrev"  Margin="4,0,0,0"
+                                    Style="{StaticResource MaterialDesignIconButton}"
+                                    Width="30" Height="30" Click="BtnPrev_Click"
+                                    ToolTip="上一页">
+                                <md:PackIcon Kind="ChevronLeft" Width="20" Height="20"/>
+                            </Button>
+                            <TextBlock x:Name="TxtPageNum" Text="1 / 1" 
+                                       VerticalAlignment="Center" FontSize="12"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       Margin="6,0"/>
+                            <Button x:Name="BtnNext" Margin="4,0,0,0"
+                                    Style="{StaticResource MaterialDesignIconButton}"
+                                    Width="30" Height="30" Click="BtnNext_Click"
+                                    ToolTip="下一页">
+                                <md:PackIcon Kind="ChevronRight" Width="20" Height="20"/>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </md:Card>
+
+            <!-- ─ 右侧图片区 ─────────────────────────────────── -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 产品信息 Header -->
+                <md:Card Grid.Row="0" Margin="0,0,0,8" Padding="14,10"
+                         x:Name="CardDetailHeader" Visibility="Collapsed">
+                    <Grid>
+                        <StackPanel Orientation="Horizontal"   VerticalAlignment="Center">
+                            <StackPanel>
+                                <TextBlock x:Name="TxtDetailCode" Text="--" Margin="14,0,0,0"
+                                           FontFamily="Consolas" FontSize="17"
+                                           FontWeight="Bold"
+                                           Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                <TextBlock x:Name="TxtDetailMeta" Text="--"
+                                           FontSize="11" Margin="0,2,0,0"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                            </StackPanel>
+                            <Separator Style="{StaticResource MaterialDesignSeparator}"/>
+                            <StackPanel Orientation="Horizontal"  >
+                                <md:PackIcon Kind="ImageMultiple" Width="15" Height="15" Margin="6,0,0,0"
+                                             Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                             VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtImgCount" Text="0 张图片" Margin="6,0,0,0"
+                                           FontSize="12" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <!-- 判定 Badge -->
+                        <Border x:Name="BorderDetailBadge" HorizontalAlignment="Right"
+                                CornerRadius="10" Padding="12,3" VerticalAlignment="Center">
+                            <TextBlock x:Name="TxtDetailBadge" Text="--"
+                                       FontFamily="Consolas" FontWeight="Bold" FontSize="12"/>
+                        </Border>
+                    </Grid>
+                </md:Card>
+
+                <!-- 图片卡片区 -->
+                <md:Card Grid.Row="1">
+                    <StackPanel>
+                        <!-- 空状态 -->
+                        <Grid x:Name="GridEmpty">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Opacity="0.3">
+                                <md:PackIcon Kind="ImageSearch" Width="64" Height="64" Margin="12,0,0,0"
+                                     HorizontalAlignment="Center"/>
+                                <TextBlock Text="从左侧选择一个产品" FontSize="15" Margin="12,0,0,0"
+                                   HorizontalAlignment="Center"/>
+                                <TextBlock Text="将展示该产品所有检测工位的图片" FontSize="12" Margin="12,0,0,0"
+                                   HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- 图片 WrapPanel（选中后显示）-->
+                        <ScrollViewer x:Name="SvImages"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Visibility="Collapsed">
+                            <!-- 图片卡片由 code-behind 动态生成并添加到此 WrapPanel -->
+                            <WrapPanel x:Name="WpImages" Margin="10"
+                               Orientation="Horizontal"
+                               ItemWidth="260"/>
+                        </ScrollViewer>
+                    </StackPanel>
+    
+                </md:Card>
+            </Grid>
+        </Grid>
+
+        <!-- ══ 放大复检遮罩（覆盖全控件，ZIndex=100）═══════════ -->
+        <Grid Grid.RowSpan="2" x:Name="GridOverlay"
+              Visibility="Collapsed" Panel.ZIndex="100"
+              Background="#CC000000"
+              MouseDown="GridOverlay_MouseDown">
+
+            <!-- 弹窗主体（点击内部不关闭）-->
+            <md:Card Margin="32" MouseDown="DialogCard_MouseDown"
+                     md:ShadowAssist.Darken="True">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <!-- 图片区 -->
+                        <ColumnDefinition Width="280"/>
+                        <!-- 操作面板 -->
+                    </Grid.ColumnDefinitions>
+
+                    <!-- ─ 左：大图 ─────────────────────────────── -->
+                    <Grid Grid.Column="0"
+                          Background="{DynamicResource MaterialDesignCardBackground}">
+
+                        <!-- 图片（可缩放）-->
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Auto"
+                                      PanningMode="Both"
+                                      x:Name="SvZoom">
+                            <Grid>
+                                <!-- 图片 -->
+                                <Image x:Name="ImgZoom"
+                                       Stretch="Uniform" Margin="8"
+                                       RenderOptions.BitmapScalingMode="HighQuality"
+                                       MouseDown="ImgZoom_MouseDown"/>
+                                <!-- 缺陷标注框（由 code-behind 动态添加 Rectangle）-->
+                                <Canvas x:Name="BboxCanvas"
+                                        IsHitTestVisible="False"/>
+                            </Grid>
+                        </ScrollViewer>
+
+                        <!-- 上一张 -->
+                        <Button x:Name="BtnPrevImg"
+                                Style="{StaticResource MaterialDesignIconButton}"
+                                HorizontalAlignment="Left" VerticalAlignment="Center"
+                                Margin="8,0" Opacity="0.85"
+                                Click="BtnPrevImg_Click">
+                            <md:PackIcon Kind="ChevronLeft" Width="28" Height="28"/>
+                        </Button>
+
+                        <!-- 下一张 -->
+                        <Button x:Name="BtnNextImg"
+                                Style="{StaticResource MaterialDesignIconButton}"
+                                HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Margin="0,0,8,0" Opacity="0.85"
+                                Click="BtnNextImg_Click">
+                            <md:PackIcon Kind="ChevronRight" Width="28" Height="28"/>
+                        </Button>
+
+                        <!-- 关闭 -->
+                        <Button Style="{StaticResource MaterialDesignIconButton}"
+                                HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Margin="0,6,6,0"
+                                Click="BtnCloseOverlay_Click">
+                            <md:PackIcon Kind="Close" Width="20" Height="20"/>
+                        </Button>
+
+                        <!-- 图片计数 / 角度 -->
+                        <Border HorizontalAlignment="Left" VerticalAlignment="Top"
+                                Margin="10,8" Background="#99000000" CornerRadius="6"
+                                Padding="8,3">
+                            <StackPanel Orientation="Horizontal" >
+                                <TextBlock x:Name="TxtZoomCounter" Text="1 / 6"
+                                           Margin="8,0,0,0"
+                                           FontFamily="Consolas" FontSize="12"
+                                           Foreground="White"/>
+                                <TextBlock x:Name="TxtZoomAngle" Text="--"
+                                           FontSize="12" Foreground="#BBFFFFFF"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 底部缩略图导航 -->
+                        <Border VerticalAlignment="Bottom" Margin="8"
+                                Background="#88000000" CornerRadius="8" Padding="8,5">
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Hidden" Height="44">
+                                <StackPanel x:Name="SpThumbs"
+                                            Orientation="Horizontal"  />
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+
+                    <!-- ─ 右：信息 + 复检操作 ────────────────── -->
+                    <Border Grid.Column="1"
+                            BorderThickness="1,0,0,0"
+                            BorderBrush="{DynamicResource MaterialDesignDivider}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+
+                                <!-- 弹窗标题 -->
+                                <Border Padding="16,12"
+                                        BorderThickness="0,0,0,1"
+                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                        Background="{DynamicResource MaterialDesignToolBarBackground}">
+                                    <StackPanel  >
+                                        <TextBlock x:Name="TxtZoomTitle" Text="--"
+                                                   Margin="2,0,0,0"
+                                                   FontSize="14" FontWeight="Medium"/>
+                                        <TextBlock x:Name="TxtZoomStation" Text="工位 --"
+                                                   FontSize="11"
+                                                   Margin="2,0,0,0"
+                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 视觉系统信息 -->
+                                <Expander Header="视觉系统判断" IsExpanded="True"
+                                          Margin="0,4,0,0">
+                                    <StackPanel Margin="16,6,16,10" >
+                                        <Grid Margin="7,0,0,0">
+                                            <TextBlock Text="视觉判定" FontSize="11"
+                                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                       VerticalAlignment="Center"/>
+                                            <Border x:Name="BorderVision" HorizontalAlignment="Right"
+                                                    CornerRadius="10" Padding="10,2"
+                                                    Background="#1A4CAF50">
+                                                <TextBlock x:Name="TxtVisionResult" Text="--"
+                                                           FontFamily="Consolas" FontSize="11"
+                                                           FontWeight="Bold" Foreground="#4CAF50"/>
+                                            </Border>
+                                        </Grid>
+                                        <Grid Margin="7,0,0,0">
+                                            <TextBlock Text="置信度" FontSize="11"
+                                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                            <TextBlock x:Name="TxtVisionScore" Text="--"
+                                                       HorizontalAlignment="Right"
+                                                       FontFamily="Consolas" FontSize="11"/>
+                                        </Grid>
+                                        <ProgressBar x:Name="PbScore" Minimum="0" Maximum="1"
+                                                     Value="0" Height="4"/>
+                                        <Grid Margin="7,0,0,0">
+                                            <TextBlock Text="缺陷类型" FontSize="11"
+                                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                            <TextBlock x:Name="TxtNgType" Text="--"
+                                                       HorizontalAlignment="Right"
+                                                       FontFamily="Consolas" FontSize="11"
+                                                       Foreground="#FFC107"/>
+                                        </Grid>
+                                        <Grid Margin="7,0,0,0">
+                                            <TextBlock Text="缺陷坐标" FontSize="11"
+                                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                            <TextBlock x:Name="TxtBbox" Text="--"
+                                                       HorizontalAlignment="Right"
+                                                       FontFamily="Consolas" FontSize="10"
+                                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Expander>
+
+                                <Separator/>
+
+                                <!-- 人工复检 -->
+                                <StackPanel Margin="16,12,16,12"  >
+                                    <TextBlock Text="人工复检判断" FontSize="12" FontWeight="Medium" Margin="10,0,0,0"/>
+
+                                    <!-- OK / NG 大按钮 -->
+                                    <UniformGrid Columns="2" Rows="1"  Margin="10,0,0,0">
+                                        <ToggleButton x:Name="TglOk" Margin="0,0,4,0"
+                                                      Height="68"
+                                                      Checked="TglOk_Checked"
+                                                      Unchecked="TglOk_Unchecked">
+                                            <ToggleButton.Style>
+                                                <Style TargetType="ToggleButton"
+                                                       BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+                                                    <Setter Property="BorderBrush" Value="#4CAF50"/>
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsChecked" Value="True">
+                                                            <Setter Property="Background" Value="#4CAF50"/>
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ToggleButton.Style>
+                                            <StackPanel HorizontalAlignment="Center" >
+                                                <md:PackIcon Kind="CheckCircleOutline" Width="26" Height="26" Margin="4,0,0,0"
+                                                             Foreground="#4CAF50"
+                                                             HorizontalAlignment="Center"/>
+                                                <TextBlock Text="OK" FontSize="16" FontWeight="Bold"
+                                                           Foreground="#4CAF50"
+                                                           HorizontalAlignment="Center"/>
+                                                <TextBlock Text="合格放行" FontSize="10"
+                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                           HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                        </ToggleButton>
+
+                                        <ToggleButton x:Name="TglNg" Margin="4,0,0,0"
+                                                      Height="68"
+                                                      Checked="TglNg_Checked"
+                                                      Unchecked="TglNg_Unchecked">
+                                            <ToggleButton.Style>
+                                                <Style TargetType="ToggleButton"
+                                                       BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+                                                    <Setter Property="BorderBrush" Value="#F44336"/>
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsChecked" Value="True">
+                                                            <Setter Property="Background" Value="#F44336"/>
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ToggleButton.Style>
+                                            <StackPanel HorizontalAlignment="Center" >
+                                                <md:PackIcon Kind="CloseCircleOutline" Width="26" Height="26" Margin="4,0,0,0"
+                                                             Foreground="#F44336"
+                                                             HorizontalAlignment="Center"/>
+                                                <TextBlock Text="NG" FontSize="16" FontWeight="Bold"
+                                                           Foreground="#F44336"
+                                                           HorizontalAlignment="Center"/>
+                                                <TextBlock Text="判定不合格" FontSize="10"
+                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                           HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                        </ToggleButton>
+                                    </UniformGrid>
+
+                                    <!-- 操作员 -->
+                                    <TextBox x:Name="TxtUser"  Margin="10,0,0,0"
+                                             md:HintAssist.Hint="操作员姓名（必填）"
+                                             md:TextFieldAssist.HasClearButton="True"
+                                             TextChanged="ReviewInput_Changed"/>
+
+                                    <!-- 备注 -->
+                                    <TextBox x:Name="TxtComment"  Margin="10,0,0,0"
+                                             md:HintAssist.Hint="复检备注（可选）"
+                                             AcceptsReturn="True" TextWrapping="Wrap"
+                                             MinLines="3" MaxLines="5"
+                                             VerticalScrollBarVisibility="Auto"/>
+
+                                    <!-- 提交 -->
+                                    <Button x:Name="BtnSubmit"  Margin="10,0,0,0"
+                                            Style="{StaticResource MaterialDesignRaisedButton}"
+                                            HorizontalAlignment="Stretch"
+                                            Padding="0,10" IsEnabled="False"
+                                            Click="BtnSubmit_Click">
+                                        <StackPanel Orientation="Horizontal"  >
+                                            <md:PackIcon Kind="ContentSave" Width="18" Height="18" Margin="6,0,0,0"
+                                                         VerticalAlignment="Center"/>
+                                            <TextBlock Text="提交复检结果" FontSize="13"  Margin="6,0,0,0"
+                                                       VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+
+                                <Separator/>
+
+                                <!-- 历史复检记录（有记录时显示）-->
+                                <Expander x:Name="ExpHistory" Header="已有复检记录"
+                                          IsExpanded="True" Margin="0,4,0,0"
+                                          Visibility="Collapsed">
+                                    <Border Margin="16,4,16,12" Padding="12"
+                                            BorderThickness="1" CornerRadius="6"
+                                            BorderBrush="{DynamicResource MaterialDesignDivider}">
+                                        <!--<StackPanel Spacing="7">-->
+                                        <StackPanel >
+                                            <Grid>
+                                                <TextBlock Text="复检结果" FontSize="11"
+                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                <Border x:Name="BorderHistResult"
+                                                        HorizontalAlignment="Right"
+                                                        CornerRadius="10" Padding="10,2"
+                                                        Background="#1A4CAF50">
+                                                    <TextBlock x:Name="TxtHistResult" Text="--"
+                                                               FontFamily="Consolas" FontWeight="Bold"
+                                                               FontSize="11" Foreground="#4CAF50"/>
+                                                </Border>
+                                            </Grid>
+                                            <Grid>
+                                                <TextBlock Text="操作员" FontSize="11"
+                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                <TextBlock x:Name="TxtHistUser" Text="--"
+                                                           HorizontalAlignment="Right" FontSize="11"/>
+                                            </Grid>
+                                            <Grid>
+                                                <TextBlock Text="时间" FontSize="11"
+                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                <TextBlock x:Name="TxtHistTime" Text="--"
+                                                           HorizontalAlignment="Right"
+                                                           FontFamily="Consolas" FontSize="10"/>
+                                            </Grid>
+                                            <Border x:Name="BorderHistComment"
+                                                    Padding="8,6" CornerRadius="4"
+                                                    Visibility="Collapsed"
+                                                    Background="{DynamicResource MaterialDesignToolBarBackground}">
+                                                <TextBlock x:Name="TxtHistComment" Text=""
+                                                           FontSize="11" TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+                                </Expander>
+
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </md:Card>
+        </Grid>
+    </Grid>
+</UserControl>

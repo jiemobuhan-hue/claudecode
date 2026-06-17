@@ -1,215 +1,274 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.SqlClient;
 using System.Threading.Tasks;
-using ZenergyBFSI.Service;
 using ZenergyBFSI.Model;
 
 namespace ZenergyBFSI.Service
 {
-    /// <summary>
-    /// 蓝膜检测CRUD服务类
-    /// 参照CCDDataDal.cs代码结构，使用SqlHelper调用Claude前缀存储过程
-    /// </summary>
+    #region T_BlueFilmDetection CRUD — 存储过程 + 直接 SQL 回退
+
+    // 存储过程 (2个):
+    //   Proc_InsertBlueFilmDetection
+    //     @CellType nvarchar(10), @CellCode nvarchar(50), @Reinvestment int,
+    //     @DetectionArea nvarchar(10), @DetectionResults nvarchar(10),
+    //     @NGtypeNum int, @NGtype1 nvarchar(10), @NGtype2 nvarchar(10),
+    //     @NGtype3 nvarchar(10), @CreateTime datetime
+    //     Num 为 identity, 存储过程不返回 Num, 用 @@IDENTITY 获取
+    //
+    //   PROC_GetBlueFilmDetection (分页, 返回中文列名, 不含 Num 列)
+    //     @pageIndex int, @pageSize int, @startTime datetime,
+    //     @endTime datetime, @CellCode nvarchar(50)
+    //     返回列: 电芯类型, 电芯条码, 是否复投, 检测区域, 检测结果,
+    //             NG类型数量, NG类型1, NG类型2, NG类型3, 创建时间
+    //
+    // 缺失存储过程 (直接 SQL):
+    //   GetByNum / GetAll / GetCount / Update / Delete
+
     public class BlueFilmDetectionRepository
     {
         private readonly string _connectionString;
-
-        // Claude前缀存储过程名称常量
-        private const string InsertProcName = "Proc_InsertBlueFilmDetection";
-        private const string GetAllProcName = "PROC_Claude_GetAllBlueFilmDetection";
-        private const string GetByNumProcName = "PROC_Claude_GetBlueFilmDetectionByNum";
-        private const string GetByCellCodeProcName = "PROC_Claude_GetBlueFilmDetectionByCellCode";
-        private const string UpdateProcName = "PROC_Claude_UpdateBlueFilmDetection";
-        private const string DeleteProcName = "PROC_Claude_DeleteBlueFilmDetection";
-        private const string GetCountProcName = "PROC_Claude_GetBlueFilmDetectionCount";
 
         public BlueFilmDetectionRepository(string connectionString)
         {
             _connectionString = connectionString;
         }
 
-        /// <summary>
-        /// 插入蓝膜检测记录
-        /// </summary>
-        public int Insert(T_BlueFilmDetection model)
+        #region Insert
+
+        // 返回自增 Num (使用 @@IDENTITY, 因为此库 SCOPE_IDENTITY 异常返回 NULL)
+        public int? Insert(T_BlueFilmDetection model)
         {
-            var parameters = new System.Data.SqlClient.SqlParameter[]
+            using var conn = new SqlConnection(_connectionString);
+            conn.Open();
+            using (var cmd = new SqlCommand("Proc_InsertBlueFilmDetection", conn))
             {
-                new System.Data.SqlClient.SqlParameter("@BottomCellType", model.BottomCellType ?? (object)DBNull.Value),
-                new System.Data.SqlClient.SqlParameter("@CellCode", model.CellCode ?? (object)DBNull.Value),
-                new System.Data.SqlClient.SqlParameter("@DetectionArea", model.DetectionArea ?? (object)DBNull.Value),
-                new System.Data.SqlClient.SqlParameter("@DetectionResults", model.DetectionResults ?? (object)DBNull.Value),
-                new System.Data.SqlClient.SqlParameter("@NGtypeNum", model.NGtypeNum ?? 0),
-                new System.Data.SqlClient.SqlParameter("@NGtype1", model.NGtype1 ?? (object)DBNull.Value),
-                new System.Data.SqlClient.SqlParameter("@NGtype2", model.NGtype2 ?? (object)DBNull.Value),
-                new System.Data.SqlClient.SqlParameter("@NGtype3", model.NGtype3 ?? (object)DBNull.Value),
-                new System.Data.SqlClient.SqlParameter("@CreateTime", model.CreateTime ?? DateTime.Now)
-            };
-            return SqlHelper.ExecuteNonQuery(_connectionString, InsertProcName, 2, parameters);
+                cmd.CommandType = CommandType.StoredProcedure;
+                cmd.Parameters.AddWithValue("@CellType", (object)model.CellType ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@CellCode", (object)model.CellCode ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@Reinvestment", (object)model.Reinvestment ?? 0);
+                cmd.Parameters.AddWithValue("@DetectionArea", (object)model.DetectionArea ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@DetectionResults", (object)model.DetectionResults ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@NGtypeNum", (object)model.NGtypeNum ?? 0);
+                cmd.Parameters.AddWithValue("@NGtype1", (object)model.NGtype1 ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@NGtype2", (object)model.NGtype2 ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@NGtype3", (object)model.NGtype3 ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@CreateTime", (object)model.CreateTime ?? DateTime.Now);
+                cmd.ExecuteNonQuery();
+            }
+            using (var cmd = new SqlCommand("SELECT CAST(@@IDENTITY AS INT)", conn))
+            {
+                var v = cmd.ExecuteScalar();
+                return v == null || v == DBNull.Value ? (int?)null : Convert.ToInt32(v);
+            }
         }
 
-        /// <summary>
-        /// 异步插入蓝膜检测记录
-        /// </summary>
-        public async Task<int> InsertAsync(T_BlueFilmDetection model)
+        public async Task<int?> InsertAsync(T_BlueFilmDetection model)
         {
             return await Task.Run(() => Insert(model));
         }
 
-        /// <summary>
-        /// 查询所有蓝膜检测记录
-        /// </summary>
-        public List<T_BlueFilmDetection> GetAll()
-        {
-            var dt = SqlHelper.GetDataTable(_connectionString, GetAllProcName, 2);
-            return MapDataTableToList(dt);
-        }
+        #endregion
 
-        /// <summary>
-        /// 异步查询所有蓝膜检测记录
-        /// </summary>
-        public async Task<List<T_BlueFilmDetection>> GetAllAsync()
-        {
-            return await Task.Run(() => GetAll());
-        }
+        #region Query
 
-        /// <summary>
-        /// 根据Num查询蓝膜检测记录
-        /// </summary>
-        public T_BlueFilmDetection GetByNum(int num)
-        {
-            var parameters = new System.Data.SqlClient.SqlParameter[]
-            {
-                new System.Data.SqlClient.SqlParameter("@Num", num)
-            };
-            var dt = SqlHelper.GetDataTable(_connectionString, GetByNumProcName, 2, parameters);
-            if (dt.Rows.Count > 0)
-            {
-                return MapRowToModel(dt.Rows[0]);
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// 异步根据Num查询蓝膜检测记录
-        /// </summary>
-        public async Task<T_BlueFilmDetection> GetByNumAsync(int num)
-        {
-            return await Task.Run(() => GetByNum(num));
-        }
-
-        /// <summary>
-        /// 根据电芯码查询检测记录
-        /// </summary>
+        // PROC_GetBlueFilmDetection 返回中文列名且不含 Num
         public List<T_BlueFilmDetection> GetByCellCode(string cellCode)
         {
-            var parameters = new System.Data.SqlClient.SqlParameter[]
-            {
-                new System.Data.SqlClient.SqlParameter("@CellCode", cellCode)
-            };
-            var dt = SqlHelper.GetDataTable(_connectionString, GetByCellCodeProcName, 2, parameters);
-            return MapDataTableToList(dt);
+            using var conn = new SqlConnection(_connectionString);
+            conn.Open();
+            using var cmd = new SqlCommand("PROC_GetBlueFilmDetection", conn)
+            { CommandType = CommandType.StoredProcedure };
+            cmd.Parameters.AddWithValue("@pageIndex", 1);
+            cmd.Parameters.AddWithValue("@pageSize", int.MaxValue);
+            cmd.Parameters.AddWithValue("@startTime", new DateTime(2000, 1, 1));
+            cmd.Parameters.AddWithValue("@endTime", new DateTime(2099, 12, 31));
+            cmd.Parameters.AddWithValue("@CellCode", string.IsNullOrEmpty(cellCode) ? "ALL" : cellCode);
+
+            var ds = new DataSet();
+            using var da = new SqlDataAdapter(cmd);
+            da.Fill(ds);
+            if (ds.Tables.Count < 2) return new List<T_BlueFilmDetection>();
+
+            return MapFromChineseColumns(ds.Tables[1]);
         }
 
-        /// <summary>
-        /// 异步根据电芯码查询检测记录
-        /// </summary>
         public async Task<List<T_BlueFilmDetection>> GetByCellCodeAsync(string cellCode)
         {
             return await Task.Run(() => GetByCellCode(cellCode));
         }
 
-        /// <summary>
-        /// 更新蓝膜检测记录
-        /// </summary>
-        public int Update(T_BlueFilmDetection model)
+        // 直接 SQL — 无对应存储过程
+        public List<T_BlueFilmDetection> GetAll()
         {
-            var parameters = new System.Data.SqlClient.SqlParameter[]
-            {
-                new System.Data.SqlClient.SqlParameter("@Num", model.Num ?? 0),
-                new System.Data.SqlClient.SqlParameter("@BottomCellType", model.BottomCellType ?? (object)DBNull.Value),
-                new System.Data.SqlClient.SqlParameter("@CellCode", model.CellCode ?? (object)DBNull.Value),
-                new System.Data.SqlClient.SqlParameter("@DetectionArea", model.DetectionArea ?? (object)DBNull.Value),
-                new System.Data.SqlClient.SqlParameter("@DetectionResults", model.DetectionResults ?? (object)DBNull.Value),
-                new System.Data.SqlClient.SqlParameter("@NGtypeNum", model.NGtypeNum ?? 0),
-                new System.Data.SqlClient.SqlParameter("@NGtype1", model.NGtype1 ?? (object)DBNull.Value),
-                new System.Data.SqlClient.SqlParameter("@NGtype2", model.NGtype2 ?? (object)DBNull.Value),
-                new System.Data.SqlClient.SqlParameter("@NGtype3", model.NGtype3 ?? (object)DBNull.Value)
-            };
-            return SqlHelper.ExecuteNonQuery(_connectionString, UpdateProcName, 2, parameters);
+            var dt = ExecQuery("SELECT * FROM T_BlueFilmDetection ORDER BY Num DESC");
+            return MapFromEnglishColumns(dt);
         }
 
-        /// <summary>
-        /// 异步更新蓝膜检测记录
-        /// </summary>
-        public async Task<int> UpdateAsync(T_BlueFilmDetection model)
+        public async Task<List<T_BlueFilmDetection>> GetAllAsync()
         {
-            return await Task.Run(() => Update(model));
+            return await Task.Run(() => GetAll());
         }
 
-        /// <summary>
-        /// 删除蓝膜检测记录
-        /// </summary>
-        public int Delete(int num)
+        public T_BlueFilmDetection GetByNum(int num)
         {
-            var parameters = new System.Data.SqlClient.SqlParameter[]
-            {
-                new System.Data.SqlClient.SqlParameter("@Num", num)
-            };
-            return SqlHelper.ExecuteNonQuery(_connectionString, DeleteProcName, 2, parameters);
+            var dt = ExecQuery("SELECT * FROM T_BlueFilmDetection WHERE Num = @p0",
+                new SqlParameter("@p0", num));
+            return dt.Rows.Count > 0 ? MapFromEnglishColumns(dt)[0] : null;
         }
 
-        /// <summary>
-        /// 异步删除蓝膜检测记录
-        /// </summary>
-        public async Task<int> DeleteAsync(int num)
+        public async Task<T_BlueFilmDetection> GetByNumAsync(int num)
         {
-            return await Task.Run(() => Delete(num));
+            return await Task.Run(() => GetByNum(num));
         }
 
-        /// <summary>
-        /// 获取记录总数
-        /// </summary>
         public long GetCount()
         {
-            var result = SqlHelper.ExecuteScalar(_connectionString, GetCountProcName, 2);
-            return result == null ? 0 : Convert.ToInt64(result);
+            using var conn = new SqlConnection(_connectionString);
+            conn.Open();
+            using var cmd = new SqlCommand("SELECT COUNT(*) FROM T_BlueFilmDetection", conn);
+            return Convert.ToInt64(cmd.ExecuteScalar());
         }
 
-        /// <summary>
-        /// 异步获取记录总数
-        /// </summary>
         public async Task<long> GetCountAsync()
         {
             return await Task.Run(() => GetCount());
         }
 
-        private T_BlueFilmDetection MapRowToModel(DataRow row)
+        #endregion
+
+        #region Update / Delete — 直接 SQL
+
+        public int Update(T_BlueFilmDetection model)
         {
-            return new T_BlueFilmDetection
-            {
-                Num = row["Num"] == DBNull.Value ? (int?)null : Convert.ToInt32(row["Num"]),
-                BottomCellType = row["BottomCellType"] == DBNull.Value ? null : row["BottomCellType"].ToString().Trim(),
-                CellCode = row["CellCode"] == DBNull.Value ? null : row["CellCode"].ToString(),
-                DetectionArea = row["DetectionArea"] == DBNull.Value ? null : row["DetectionArea"].ToString().Trim(),
-                DetectionResults = row["DetectionResults"] == DBNull.Value ? null : row["DetectionResults"].ToString().Trim(),
-                NGtypeNum = row["NGtypeNum"] == DBNull.Value ? (int?)null : Convert.ToInt32(row["NGtypeNum"]),
-                NGtype1 = row["NGtype1"] == DBNull.Value ? null : row["NGtype1"].ToString().Trim(),
-                NGtype2 = row["NGtype2"] == DBNull.Value ? null : row["NGtype2"].ToString().Trim(),
-                NGtype3 = row["NGtype3"] == DBNull.Value ? null : row["NGtype3"].ToString().Trim(),
-                CreateTime = row["CreateTime"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(row["CreateTime"])
-            };
+            return ExecNonQuery(@"
+                UPDATE T_BlueFilmDetection SET
+                    CellType = @CellType, CellCode = @CellCode,
+                    Reinvestment = @Reinvestment, DetectionArea = @DetectionArea,
+                    DetectionResults = @DetectionResults, NGtypeNum = @NGtypeNum,
+                    NGtype1 = @NGtype1, NGtype2 = @NGtype2, NGtype3 = @NGtype3
+                WHERE Num = @Num",
+                new SqlParameter("@Num", (object)model.Num ?? 0),
+                new SqlParameter("@CellType", (object)model.CellType ?? DBNull.Value),
+                new SqlParameter("@CellCode", (object)model.CellCode ?? DBNull.Value),
+                new SqlParameter("@Reinvestment", (object)model.Reinvestment ?? 0),
+                new SqlParameter("@DetectionArea", (object)model.DetectionArea ?? DBNull.Value),
+                new SqlParameter("@DetectionResults", (object)model.DetectionResults ?? DBNull.Value),
+                new SqlParameter("@NGtypeNum", (object)model.NGtypeNum ?? 0),
+                new SqlParameter("@NGtype1", (object)model.NGtype1 ?? DBNull.Value),
+                new SqlParameter("@NGtype2", (object)model.NGtype2 ?? DBNull.Value),
+                new SqlParameter("@NGtype3", (object)model.NGtype3 ?? DBNull.Value));
         }
 
-        private List<T_BlueFilmDetection> MapDataTableToList(DataTable dt)
+        public async Task<int> UpdateAsync(T_BlueFilmDetection model)
+        {
+            return await Task.Run(() => Update(model));
+        }
+
+        public int Delete(int num)
+        {
+            return ExecNonQuery("DELETE FROM T_BlueFilmDetection WHERE Num = @p0",
+                new SqlParameter("@p0", num));
+        }
+
+        public async Task<int> DeleteAsync(int num)
+        {
+            return await Task.Run(() => Delete(num));
+        }
+
+        #endregion
+
+        #region 列映射
+
+        // PROC_GetBlueFilmDetection 返回中文列名
+        private List<T_BlueFilmDetection> MapFromChineseColumns(DataTable dt)
         {
             var list = new List<T_BlueFilmDetection>();
             foreach (DataRow row in dt.Rows)
-            {
-                list.Add(MapRowToModel(row));
-            }
+                list.Add(new T_BlueFilmDetection
+                {
+                    Num = null, // 存储过程不返回 Num
+                    CellType = Str(row, "电芯类型"),
+                    CellCode = Str(row, "电芯条码"),
+                    Reinvestment = Int(row, "是否复投"),
+                    DetectionArea = Str(row, "检测区域"),
+                    DetectionResults = Str(row, "检测结果"),
+                    NGtypeNum = Int(row, "NG类型数量"),
+                    NGtype1 = Str(row, "NG类型1"),
+                    NGtype2 = Str(row, "NG类型2"),
+                    NGtype3 = Str(row, "NG类型3"),
+                    CreateTime = Dt(row, "创建时间")
+                });
             return list;
         }
+
+        // 直接 SQL (SELECT *) 返回英文列名
+        private List<T_BlueFilmDetection> MapFromEnglishColumns(DataTable dt)
+        {
+            var list = new List<T_BlueFilmDetection>();
+            foreach (DataRow row in dt.Rows)
+                list.Add(new T_BlueFilmDetection
+                {
+                    Num = Int(row, "Num"),
+                    CellType = Str(row, "CellType"),
+                    CellCode = Str(row, "CellCode"),
+                    Reinvestment = Int(row, "Reinvestment"),
+                    DetectionArea = Str(row, "DetectionArea"),
+                    DetectionResults = Str(row, "DetectionResults"),
+                    NGtypeNum = Int(row, "NGtypeNum"),
+                    NGtype1 = Str(row, "NGtype1"),
+                    NGtype2 = Str(row, "NGtype2"),
+                    NGtype3 = Str(row, "NGtype3"),
+                    CreateTime = Dt(row, "CreateTime")
+                });
+            return list;
+        }
+
+        #endregion
+
+        #region 底层 SQL 执行
+
+        private static string Str(DataRow row, string col)
+        {
+            if (!row.Table.Columns.Contains(col)) return null;
+            var v = row[col]; return v == DBNull.Value ? null : v.ToString().Trim();
+        }
+
+        private static int? Int(DataRow row, string col)
+        {
+            if (!row.Table.Columns.Contains(col)) return null;
+            var v = row[col]; if (v == DBNull.Value) return null;
+            try { return Convert.ToInt32(v); } catch { return null; }
+        }
+
+        private static DateTime? Dt(DataRow row, string col)
+        {
+            if (!row.Table.Columns.Contains(col)) return null;
+            var v = row[col]; if (v == DBNull.Value) return null;
+            try { return Convert.ToDateTime(v); } catch { return null; }
+        }
+
+        private DataTable ExecQuery(string sql, params SqlParameter[] ps)
+        {
+            using var conn = new SqlConnection(_connectionString); conn.Open();
+            using var cmd = new SqlCommand(sql, conn);
+            foreach (var p in ps) cmd.Parameters.Add(p);
+            var dt = new DataTable();
+            using var da = new SqlDataAdapter(cmd); da.Fill(dt);
+            return dt;
+        }
+
+        private int ExecNonQuery(string sql, params SqlParameter[] ps)
+        {
+            using var conn = new SqlConnection(_connectionString); conn.Open();
+            using var cmd = new SqlCommand(sql, conn);
+            foreach (var p in ps) cmd.Parameters.Add(p);
+            return cmd.ExecuteNonQuery();
+        }
+
+        #endregion
     }
+
+    #endregion
 }

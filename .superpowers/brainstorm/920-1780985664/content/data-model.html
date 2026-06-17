@@ -1,0 +1,94 @@
+<h2>数据模型：DefectRegion + 坐标系统</h2>
+<p class="subtitle">坐标换算逻辑是 Canvas 标注正确性的关键</p>
+
+<div class="section">
+  <h3>DefectRegion 类 — 单个缺陷</h3>
+  <div class="mockup">
+    <div class="mockup-header">DefectRegion 字段设计</div>
+    <div class="mockup-body">
+      <table style="width:100%; border-collapse:collapse; color:#e2e8f0; font-size:13px;">
+        <tr style="border-bottom:1px solid #334155;">
+          <th style="text-align:left; padding:8px;">字段</th><th style="text-align:left; padding:8px;">类型</th><th style="text-align:left; padding:8px;">说明</th>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:8px;">DefectId</td><td style="padding:8px;">string</td><td style="padding:8px;">唯一标识，用于复判事件传递</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:8px;">DefectType</td><td style="padding:8px;">string</td><td style="padding:8px;">缺陷类型：划痕 / 凹坑 / 异物 / 气泡 ...</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:8px;">Confidence</td><td style="padding:8px;">double</td><td style="padding:8px;">置信度 0.0 ~ 1.0</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:8px;">X, Y, Width, Height</td><td style="padding:8px;">double</td><td style="padding:8px; background:#fef3c708;">⭐ 归一化坐标 0.0~1.0（与图片分辨率解耦）</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:8px;">ReviewStatus</td><td style="padding:8px;">enum</td><td style="padding:8px;">Unreviewed / OK / NG</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:8px;">ReviewUser / ReviewComment</td><td style="padding:8px;">string</td><td style="padding:8px;">复判信息</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>坐标换算公式</h3>
+  <div class="mockup">
+    <div class="mockup-header">从归一化坐标 → Canvas 像素坐标</div>
+    <div class="mockup-body">
+      <div style="background:#0f172a; border-radius:8px; padding:16px; font-family:monospace; color:#e2e8f0; line-height:1.8;">
+        <div style="color:#38bdf8;">// 图片原始尺寸</div>
+        <div>originalW = bitmap.PixelWidth</div>
+        <div>originalH = bitmap.PixelHeight</div>
+        <br>
+        <div style="color:#38bdf8;">// Image 控件实际渲染尺寸（考虑 Stretch=Uniform）</div>
+        <div>displayW = image.ActualWidth</div>
+        <div>displayH = image.ActualHeight</div>
+        <br>
+        <div style="color:#38bdf8;">// 归一化坐标 → 显示坐标</div>
+        <div style="color:#fef3c7;">scale</span> = min(displayW / originalW, displayH / originalH)</div>
+        <div>offsetX = (displayW - originalW * scale) / 2</div>
+        <div>offsetY = (displayH - originalH * scale) / 2</div>
+        <br>
+        <div>rectX = offsetX + <span style="color:#a78bfa;">defect.X</span> * originalW * scale</div>
+        <div>rectY = offsetY + <span style="color:#a78bfa;">defect.Y</span> * originalH * scale</div>
+        <div>rectW = <span style="color:#a78bfa;">defect.Width</span> * originalW * scale</div>
+        <div>rectH = <span style="color:#a78bfa;">defect.Height</span> * originalH * scale</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>默认数据策略</h3>
+  <div class="mockup">
+    <div class="mockup-header">GenerateDefaultDefects() — 在视觉数据就绪前的占位方案</div>
+    <div class="mockup-body" style="color:#e2e8f0; font-size:13px; line-height:1.8;">
+      <p>在 <code>ImageRecord</code> 中新增静态方法 <code>GenerateDefaultDefects()</code>：</p>
+      <ul>
+        <li>为每张图片生成 1-3 个默认缺陷区域</li>
+        <li>坐标固定在图片中央区域（如 X=0.3, Y=0.3, W=0.15, H=0.10）</li>
+        <li>类型随机从 {划痕, 凹坑, 异物} 选取</li>
+        <li>置信度随机 0.7~0.95</li>
+        <li><strong>后续替换</strong>：改为从 SQL Server 查询视觉检测结果表填充</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>确认点</h3>
+  <div style="display:flex; flex-direction:column; gap:8px;">
+    <div style="background:#1e293b; border-radius:8px; padding:12px; color:#e2e8f0;">
+      <span style="color:#38bdf8;">1. 坐标格式</span> — 用归一化 0.0~1.0，与图片分辨率无关。OK？
+    </div>
+    <div style="background:#1e293b; border-radius:8px; padding:12px; color:#e2e8f0;">
+      <span style="color:#38bdf8;">2. DefectId</span> — 用 GUID 字符串，SQL Server 实际字段名以后对接时再映射。OK？
+    </div>
+    <div style="background:#1e293b; border-radius:8px; padding:12px; color:#e2e8f0;">
+      <span style="color:#38bdf8;">3. 默认数据</span> — 放在 ImageRecord.GenerateDefaultDefects()，以后替换为 Repository 查询。OK？
+    </div>
+  </div>
+</div>

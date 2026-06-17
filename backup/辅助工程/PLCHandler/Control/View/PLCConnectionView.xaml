@@ -1,0 +1,82 @@
+<UserControl x:Class="PLCHandler.View.PLCConnectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             Background="#1E1E1E">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="300"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- 左侧 PLC 列表 dxGrid -->
+        <dxg:GridControl x:Name="gridPlc"
+                         Grid.Column="0"
+                         ItemsSource="{Binding PlcList}"
+                         SelectedItemChanged="gridPlc_SelectedItemChanged">
+            <dxg:GridControl.View>
+                <dxg:TableView Name="plcTableView"
+                               AllowEditing="False"/>
+            </dxg:GridControl.View>
+            <!-- 状态图标 -->
+            <dxg:GridColumn FieldName="StatusIcon" Header="" Width="40" ReadOnly="True"/>
+            <!-- PLC名称 -->
+            <dxg:GridColumn FieldName="Name" Header="PLC名称" Width="120" ReadOnly="True"/>
+            <!-- 品牌 -->
+            <dxg:GridColumn FieldName="Brand" Header="品牌" Width="80" ReadOnly="True"/>
+            <!-- IP:Port -->
+            <dxg:GridColumn FieldName="IpPort" Header="IP地址" Width="130" ReadOnly="True"/>
+            <!-- 信号数 -->
+            <dxg:GridColumn FieldName="SignalCount" Header="信号数" Width="60" ReadOnly="True"/>
+        </dxg:GridControl>
+
+        <!-- 右侧详情面板 -->
+        <Border Grid.Column="1" Background="#2D2D30" Margin="8,0,0,0" CornerRadius="4" Padding="16">
+            <StackPanel DataContext="{Binding SelectedPlc}">
+                <TextBlock Text="PLC 详情" FontSize="14" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,16"/>
+
+                <TextBlock Text="名称" FontSize="11" Foreground="#888" Margin="0,0,0,4"/>
+                <TextBlock Text="{Binding Name}" FontSize="13" Foreground="White" Margin="0,0,0,12"/>
+
+                <TextBlock Text="连接状态" FontSize="11" Foreground="#888" Margin="0,0,0,4"/>
+                <Border CornerRadius="4" Padding="8,4" HorizontalAlignment="Left" Margin="0,0,0,12">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="#555"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                    <Setter Property="Background" Value="#4CAF50"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock FontSize="12" Foreground="White">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text" Value="离线"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                        <Setter Property="Text" Value="在线"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Border>
+
+                <TextBlock Text="IP地址" FontSize="11" Foreground="#888" Margin="0,0,0,4"/>
+                <TextBlock Text="{Binding IpAddress}" FontSize="13" Foreground="White" FontFamily="Consolas" Margin="0,0,0,12"/>
+
+                <TextBlock Text="端口" FontSize="11" Foreground="#888" Margin="0,0,0,4"/>
+                <TextBlock Text="{Binding Port}" FontSize="13" Foreground="White" FontFamily="Consolas" Margin="0,0,0,12"/>
+
+                <TextBlock Text="品牌" FontSize="11" Foreground="#888" Margin="0,0,0,4"/>
+                <TextBlock Text="{Binding Brand}" FontSize="13" Foreground="White" Margin="0,0,0,12"/>
+
+                <TextBlock Text="信号数量" FontSize="11" Foreground="#888" Margin="0,0,0,4"/>
+                <TextBlock Text="{Binding SignalCount}" FontSize="13" Foreground="White" FontFamily="Consolas" Margin="0,0,0,16"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

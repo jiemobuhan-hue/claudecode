@@ -1,0 +1,30 @@
+[
+  {
+    "id": "omron_1",
+    "name": "Omron PLC #1",
+    "brand": "Omron",
+    "ipAddress": "192.168.1.11",
+    "port": 9600,
+    "slot": 0,
+    "channel": 0,
+    "group": "Omron",
+    "isEnabled": true,
+    "pollingIntervalMs": 500,
+    "connectionTimeoutMs": 3000,
+    "reconnectIntervalMs": 5000
+  },
+  {
+    "id": "omron_2",
+    "name": "Omron PLC #2",
+    "brand": "Omron",
+    "ipAddress": "192.168.1.1",
+    "port": 9600,
+    "slot": 0,
+    "channel": 0,
+    "group": "Omron",
+    "isEnabled": true,
+    "pollingIntervalMs": 500,
+    "connectionTimeoutMs": 3000,
+    "reconnectIntervalMs": 5000
+  }
+]

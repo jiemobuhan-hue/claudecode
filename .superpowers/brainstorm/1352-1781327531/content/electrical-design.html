@@ -1,0 +1,98 @@
+<h2>ELECTRICAL.md — 结构设计</h2>
+<p class="subtitle">独立知识库文件，所有电气/PLC 知识的唯一真相源</p>
+
+<div class="section">
+  <h3>章节规划</h3>
+
+  <div style="display:flex; flex-direction:column; gap:12px;">
+
+    <div style="background:#1e293b; border-left:3px solid #38bdf8; border-radius:6px; padding:14px;">
+      <div class="label" style="color:#38bdf8;">§1 PLC 硬件拓扑</div>
+      <p style="color:#e2e8f0; margin:6px 0 0 0; font-size:13px;">
+        2 台 Omron PLC · FINS TCP 协议 · IP/端口 · 来料侧 vs 出站侧职责 · PLCHandler 架构图
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #a78bfa; border-radius:6px; padding:14px;">
+      <div class="label" style="color:#a78bfa;">§2 完整信号表</div>
+      <p style="color:#e2e8f0; margin:6px 0 0 0; font-size:13px;">
+        50 个信号按 PLC 分组 · 地址/数据类型/名称/用途/读写方向 · 按通道和功能分类索引
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #34d399; border-radius:6px; padding:14px;">
+      <div class="label" style="color:#34d399;">§3 I/O 流程与时序</div>
+      <p style="color:#e2e8f0; margin:6px 0 0 0; font-size:13px;">
+        来料流程（触发→扫码→MOM查单→结果回写）· 分流流程（触发→查询检测→分拣→结果回写）· 心跳机制 · 视觉工控机同步 · 时序图
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #f97316; border-radius:6px; padding:14px;">
+      <div class="label" style="color:#f97316;">§4 PLCHandler 架构</div>
+      <p style="color:#e2e8f0; margin:6px 0 0 0; font-size:13px;">
+        PlcMonitor → PlcChannel → IPlcConnection 三层模型 · SignalReader 类型分发 · RetryPolicy 指数退避 · Rx Subject 推送 · 配置加载流程
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #eab308; border-radius:6px; padding:14px;">
+      <div class="label" style="color:#eab308;">§5 工位状态机与 PLC 交互</div>
+      <p style="color:#e2e8f0; margin:6px 0 0 0; font-size:13px;">
+        8 工位（4通道×来料+分流）· IStationHandler 三步循环 · 全局心跳暂停机制 · AutoRun 中的 PLC 读写封装方法
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #ef4444; border-radius:6px; padding:14px;">
+      <div class="label" style="color:#ef4444;">§6 调试与故障排查</div>
+      <p style="color:#e2e8f0; margin:6px 0 0 0; font-size:13px;">
+        心跳丢失诊断 · 信号不触发排查 · 连接超时处理 · 配置热重载 · 添加新信号的标准步骤 · 模拟模式调试
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #8b5cf6; border-radius:6px; padding:14px;">
+      <div class="label" style="color:#8b5cf6;">§7 配置文件管理</div>
+      <p style="color:#e2e8f0; margin:6px 0 0 0; font-size:13px;">
+        plc_config.json 结构 · signals_config.csv 字段说明 · 生产 vs 测试配置 · 配置版本管理
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>/electrical 技能 — 可调用命令设计</h3>
+  <div class="mockup">
+    <div class="mockup-header">命令接口</div>
+    <div class="mockup-body">
+      <table style="width:100%; border-collapse:collapse; color:#e2e8f0; font-size:13px;">
+        <tr style="border-bottom:1px solid #334155;">
+          <th style="text-align:left; padding:8px;">命令</th><th style="text-align:left; padding:8px;">功能</th><th style="text-align:left; padding:8px;">示例</th>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:8px; font-family:monospace; color:#38bdf8;">signal &lt;name&gt;</td>
+          <td style="padding:8px;">查询信号地址、类型、读写方向</td>
+          <td style="padding:8px; font-family:monospace; font-size:11px;">signal 来料触发</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:8px; font-family:monospace; color:#38bdf8;">channel &lt;n&gt;</td>
+          <td style="padding:8px;">列出某通道所有相关信号</td>
+          <td style="padding:8px; font-family:monospace; font-size:11px;">channel 1</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:8px; font-family:monospace; color:#38bdf8;">flow &lt;in|out&gt;</td>
+          <td style="padding:8px;">展示来料或分流完整 I/O 流程</td>
+          <td style="padding:8px; font-family:monospace; font-size:11px;">flow in</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:8px; font-family:monospace; color:#38bdf8;">diag</td>
+          <td style="padding:8px;">交互式故障排查向导</td>
+          <td style="padding:8px; font-family:monospace; font-size:11px;">diag</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:8px; font-family:monospace; color:#38bdf8;">add-signal</td>
+          <td style="padding:8px;">引导式新增 PLC 信号流程</td>
+          <td style="padding:8px; font-family:monospace; font-size:11px;">add-signal</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>

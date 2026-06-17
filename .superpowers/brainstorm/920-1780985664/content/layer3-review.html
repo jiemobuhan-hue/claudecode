@@ -1,0 +1,103 @@
+<h2>第三层：DefectReviewControl — 单缺陷复判</h2>
+<p class="subtitle">独立 UserControl，嵌入第二层右侧的 DefectDetailContainer</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">DefectReviewControl 布局</div>
+    <div class="mockup-body">
+      <div style="background:#1e293b; border-radius:8px; padding:16px; width:260px;">
+
+        <!-- Cropped image -->
+        <div style="text-align:center;">
+          <div class="placeholder" style="width:200px; height:200px; margin:0 auto;">
+            缺陷裁剪图<br><span style="font-size:10px;">CroppedBitmap 300×300</span>
+          </div>
+        </div>
+
+        <!-- Defect info -->
+        <div style="background:#0f172a; border-radius:6px; padding:10px; margin-top:10px;">
+          <div style="display:flex; justify-content:space-between; color:white; font-size:12px;">
+            <span>类型: <b style="color:#ef4444;">划痕</b></span>
+            <span>置信度: <b>92%</b></span>
+          </div>
+          <div style="color:#94a3b8; font-size:11px; margin-top:4px;">
+            坐标: (0.31, 0.22) | 尺寸: 120×80px
+          </div>
+        </div>
+
+        <!-- Review buttons -->
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="mock-button" style="flex:1; background:transparent; border:2px solid #22c55e; color:#22c55e; font-size:13px;">OK</button>
+          <button class="mock-button" style="flex:1; background:transparent; border:2px solid #ef4444; color:#ef4444; font-size:13px;">NG</button>
+        </div>
+
+        <!-- Operator -->
+        <input class="mock-input" placeholder="操作员（必填）" style="margin-top:8px; width:100%; box-sizing:border-box;">
+
+        <!-- Comment -->
+        <textarea class="mock-input" placeholder="备注" style="margin-top:6px; width:100%; box-sizing:border-box; height:50px; resize:none;"></textarea>
+
+        <!-- Actions -->
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="mock-button" style="flex:1; background:#1e40af; font-size:12px;">提交复判</button>
+          <button class="mock-button" style="flex:1; background:#334155; font-size:12px;">← 返回列表</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">控件接口设计</div>
+    <div class="mockup-body" style="color:#e2e8f0; font-size:13px; line-height:1.8;">
+      <div style="margin-bottom:12px;">
+        <div class="label">构造函数</div>
+        <code style="background:#0f172a; padding:4px 8px; border-radius:4px; display:block; margin-top:4px;">
+          DefectReviewControl(string originalImagePath, DefectRegion defect)
+        </code>
+        <p style="font-size:11px; color:#94a3b8; margin-top:4px;">自动从原图裁剪缺陷区域，生成 CroppedBitmap</p>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <div class="label">输出事件</div>
+        <code style="background:#0f172a; padding:4px 8px; border-radius:4px; display:block; margin-top:4px;">
+          event Action&lt;ReviewResult&gt; ReviewSubmitted
+        </code>
+        <p style="font-size:11px; color:#94a3b8; margin-top:4px;">ReviewResult 含 DefectId, Result(OK/NG), User, Comment</p>
+      </div>
+
+      <div>
+        <div class="label">与父级交互</div>
+        <p style="font-size:12px; margin-top:4px;">父级 (UC_InspectionView) 订阅 ReviewSubmitted → 转发为 SaveReviewRequested → 外部服务处理 → OnReviewSaved 回调刷新</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>CroppedBitmap 裁剪逻辑</h3>
+  <div class="mockup">
+    <div class="mockup-header">从原图裁剪缺陷区域</div>
+    <div class="mockup-body">
+      <div style="background:#0f172a; border-radius:8px; padding:16px; font-family:monospace; color:#e2e8f0; line-height:1.8; font-size:12px;">
+        <div style="color:#38bdf8;">// 归一化坐标 → 原始像素坐标</div>
+        <div>pixelX = (int)(defect.X * bitmap.PixelWidth)</div>
+        <div>pixelY = (int)(defect.Y * bitmap.PixelHeight)</div>
+        <div>pixelW = (int)(defect.Width * bitmap.PixelWidth)</div>
+        <div>pixelH = (int)(defect.Height * bitmap.PixelHeight)</div>
+        <br>
+        <div style="color:#38bdf8;">// 扩展裁剪边界 (添加 20% padding)</div>
+        <div>cropX = max(0, pixelX - pixelW * 0.1)</div>
+        <div>cropY = max(0, pixelY - pixelH * 0.1)</div>
+        <div>cropW = min(pixelW * 1.2, bitmap.PixelWidth - cropX)</div>
+        <div>cropH = min(pixelH * 1.2, bitmap.PixelHeight - cropY)</div>
+        <br>
+        <div style="color:#38bdf8;">// WPF 裁剪</div>
+        <div>var cropped = new CroppedBitmap(bitmap,</div>
+        <div>&nbsp;&nbsp;new Int32Rect(cropX, cropY, cropW, cropH));</div>
+        <br>
+        <div style="color:#38bdf8;">// 缩放到固定显示尺寸 (300x300, 保持比例)</div>
+        <div>var display = new TransformedBitmap(cropped,</div>
+        <div>&nbsp;&nbsp;new ScaleTransform(300.0/cropW, 300.0/cropH));</div>
+      </div>
+    </div>
+  </div>
+</div>

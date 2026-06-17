@@ -1,324 +1,430 @@
-﻿<UserControl x:Class="ZenergyBFSI.View.StateCards.UC_SettingsPages"
-             xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes" 
+<UserControl x:Class="ZenergyBFSI.View.StateCards.UC_SettingsPages"
+             xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"  
-             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid" 
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
-            
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:ZenergyBFSI.View.StateCards"
-             mc:Ignorable="d" 
-             d:DesignHeight="2500.4" d:DesignWidth="2200">
+             mc:Ignorable="d"
+             d:DesignHeight="1200" d:DesignWidth="1200">
+
+    <UserControl.Resources>
+        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,20,0,12"/>
+            <Setter Property="Foreground" Value="#1a1a1a"/>
+        </Style>
+
+        <Style x:Key="FieldLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="#555"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="MinWidth" Value="110"/>
+        </Style>
+
+        <Style x:Key="FieldInputStyle" TargetType="TextBox">
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Margin" Value="0,2"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <Style x:Key="NavButtonStyle" TargetType="RadioButton">
+            <Setter Property="GroupName" Value="SettingsNav"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Foreground" Value="#555"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="4" Padding="16,0">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Background" Value="#E8EEFF"/>
+                                <Setter Property="Foreground" Value="#2962FF"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#F5F7FA"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <Grid>
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="220"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="180"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
-            <Border Background="White" BorderBrush="#E6E6E6" BorderThickness="0,0,1,0">
-                <StackPanel Margin="10,30,0,0">
-                    <ListBox Background="Transparent" BorderThickness="0" SelectedIndex="0"  >
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="ListBoxItem">
-                                <Setter Property="Height" Value="40"/>
-                                <Setter Property="Padding" Value="20,0"/>
-                                <Setter Property="Template">
-                                    <Setter.Value>
-                                        <ControlTemplate TargetType="ListBoxItem">
-                                            <Border x:Name="border" Background="Transparent" BorderBrush="#0057FF" BorderThickness="0">
-                                                <ContentPresenter VerticalAlignment="Center"/>
-                                            </Border>
-                                            <ControlTemplate.Triggers>
-                                                <Trigger Property="IsSelected" Value="True">
-                                                    <Setter TargetName="border" Property="BorderThickness" Value="4,0,0,0"/>
-                                                    <Setter TargetName="border" Property="Background" Value="#F0F6FF"/>
-                                                    <Setter Property="Foreground" Value="#0057FF"/>
-                                                    <Setter Property="FontWeight" Value="Bold"/>
-                                                </Trigger>
-                                            </ControlTemplate.Triggers>
-                                        </ControlTemplate>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </ListBox.ItemContainerStyle>
-                        <ListBoxItem Content="常规"/>
-                        <ListBoxItem Content="检测参数"/>
-                        <ListBoxItem Content="产品型号"/>
-                    </ListBox>
-                </StackPanel>
-            </Border>
+        <!-- 左侧导航 -->
+        <Border Background="#FAFBFD" BorderBrush="#E8E8E8" BorderThickness="0,0,1,0">
+            <StackPanel Margin="10,20,0,0">
+                <RadioButton Content="系统运行"   Style="{StaticResource NavButtonStyle}" IsChecked="True" Tag="sys"/>
+                <RadioButton Content="数据库配置" Style="{StaticResource NavButtonStyle}" Tag="db"/>
+                <RadioButton Content="MOM 连接"   Style="{StaticResource NavButtonStyle}" Tag="mom"/>
+                <RadioButton Content="MOM 管控参数" Style="{StaticResource NavButtonStyle}" Tag="momparam"/>
+                <RadioButton Content="PLC 连接"   Style="{StaticResource NavButtonStyle}" Tag="plc"/>
+                <RadioButton Content="PLC 信号配置" Style="{StaticResource NavButtonStyle}" Tag="plcsig"/>
+                <RadioButton Content="设备信息"   Style="{StaticResource NavButtonStyle}" Tag="device"/>
+            </StackPanel>
+        </Border>
 
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Margin="40,30,40,40" Width="800" HorizontalAlignment="Left">
+        <!-- 右侧内容 -->
+        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="30,15,30,40" MaxWidth="800">
 
-                    <TextBlock Text="常规配置" FontSize="18" FontWeight="Bold" Margin="0,0,0,25"/>
+                <!-- ═══ 系统运行 ═══ -->
+                <TextBlock Text="系统运行" Style="{StaticResource SectionHeaderStyle}"/>
+                <Border Background="White" BorderBrush="#E8E8E8" BorderThickness="1"
+                        CornerRadius="6" Padding="24">
+                    <StackPanel>
+                        <CheckBox Content="开机自启动" IsChecked="{Binding 开机自启动}" Margin="0,4"/>
 
-                    <Border Background="White" BorderBrush="#E6E6E6" BorderThickness="1" CornerRadius="3" Padding="30" Margin="0,0,0,20">
-                        <StackPanel>
-                            <TextBlock Text="系统运行" FontSize="11" FontWeight="Bold" Foreground="#3C3C3C" Margin="0,0,0,15"/>
-                            <TextBlock Text="这里是一些关于系统运行的常规功能项" FontSize="13" Foreground="#191919" Margin="0,0,0,10" Style="{StaticResource MaterialDesignBody1TextBlock}"/>
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="自动机循环等待(ms)" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding 自动机循环等待}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
 
-                            <CheckBox Content="开机自启动" IsChecked="True" Margin="0,8"/>
-                            <Grid Height="35" Margin="0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="100"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock x:Name="视觉检测数据库IP" Text="视觉检测数据库IP" 
-                                           FontSize="11"
-                                           FontWeight="Bold"  
-                                           Foreground="#3C3C3C" 
-                                    VerticalAlignment="Center"
-                                    HorizontalAlignment="Right"
-                                          />
-                                <TextBox
-                                    Grid.Column="1"
-                                    VerticalContentAlignment="Center" 
-                                    Style="{StaticResource MaterialDesignFilledTextBox }"
-                                    Padding="10,0" 
-                                    BorderBrush="#CCCCCC"
-                                    Tag="Enter username"
-                                    />
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="PLC 循环等待(ms)" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding PLC循环等待}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
 
-                            </Grid>
-                            <Grid Height="35" Margin="0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="100"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0"
-                                    VerticalAlignment="Center"
-                                    HorizontalAlignment="Right"
-                                    Text="电气PLC配置IP"
-                                    FontSize="11" FontWeight="Bold" 
-                                    Foreground="#3C3C3C"  
-                                    />
-                                <TextBox
-                                    Grid.Column="1" 
-                                     Style="{StaticResource MaterialDesignFilledTextBox }"
-                                    VerticalContentAlignment="Center" 
-                                    Padding="10,0" 
-                                    BorderBrush="#CCCCCC" 
-                                    Tag="Enter username"  />
-                            </Grid>
-                            <CheckBox Content="勾选项一" Margin="0,8"/>
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="PLC 超时警告(s)" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding PLC超时警告}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="错误等待(ms)" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding 错误等待}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="扫码超时计数" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding 扫码超时计数}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ 数据库配置 ═══ -->
+                <TextBlock Text="数据库配置" Style="{StaticResource SectionHeaderStyle}"/>
+                <Border Background="White" BorderBrush="#E8E8E8" BorderThickness="1"
+                        CornerRadius="6" Padding="24">
+                    <StackPanel>
+                        <TextBlock Text="本地 SQLite" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="#333" Margin="0,0,0,10"/>
+
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="数据库文件路径" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding SQLite路径}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+
+                        <Separator Margin="0,16" Background="#EEE"/>
+
+                        <TextBlock Text="SQL Server 视觉检测数据库" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="#333" Margin="0,0,0,10"/>
+
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="服务器地址" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding SQLServer视觉地址}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="数据库名称" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding SQLServer视觉库名}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="用户名" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding SQLServer视觉用户}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="密码" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding SQLServer视觉密码}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ MOM 连接 ═══ -->
+                <TextBlock Text="MOM 连接配置" Style="{StaticResource SectionHeaderStyle}"/>
+                <Border Background="White" BorderBrush="#E8E8E8" BorderThickness="1"
+                        CornerRadius="6" Padding="24">
+                    <StackPanel>
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="MOM 服务地址" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding MOM地址}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="心跳间隔(ms)" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding MOM心跳间隔}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="联机确认计数" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding MOM联机计数}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+
+                        <CheckBox Content="MOM 在线模式" IsChecked="{Binding MOM在线}" Margin="0,4"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ MOM 管控参数表 ═══ -->
+                <TextBlock Text="MOM 管控参数" Style="{StaticResource SectionHeaderStyle}"/>
+                <Border Background="White" BorderBrush="#E8E8E8" BorderThickness="1"
+                        CornerRadius="6" Padding="12">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <Button x:Name="momBtnRefresh" Padding="10,5"
+                                    Margin="0,0,8,0"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <md:PackIcon Kind="Refresh" Width="16" Height="16"
+                                                 VerticalAlignment="Center"/>
+                                    <TextBlock Text="刷新" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="momBtnSave" Padding="10,5"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <md:PackIcon Kind="ContentSave" Width="16" Height="16"
+                                                 VerticalAlignment="Center"/>
+                                    <TextBlock Text="保存" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
-                    </Border>
 
-                    <TextBlock Text="视觉检测参数" FontSize="18" FontWeight="Bold" Margin="0,0,0,25"/>
-                    <Border Background="White" BorderBrush="#E6E6E6" BorderThickness="1" CornerRadius="3" Padding="30" Margin="0,0,0,20">
-                        <StackPanel>
-                            <Grid Height="35">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="视觉检测参数一" FontSize="11" FontWeight="Bold" Foreground="#3C3C3C"  HorizontalAlignment="Left" VerticalAlignment="Center"/>
-                                <TextBox
-                                    Grid.Column="1" 
-                                    Style="{StaticResource MaterialDesignFilledTextBox }"
-                                    VerticalContentAlignment="Center" 
-                                    Padding="10,0" BorderBrush="#CCCCCC" 
-                                      />
-                            </Grid>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="视觉检测参数二" FontSize="11" FontWeight="Bold" Foreground="#3C3C3C"  HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                        <dxg:GridControl x:Name="MOMgridControl"
+                                         Height="350"
+                                         ItemsSource="{Binding ParamList, UpdateSourceTrigger=PropertyChanged}">
+                            <dxg:GridControl.View>
+                                <dxg:TableView x:Name="MOMGridView"
+                                               ShowDataNavigator="True"
+                                               NavigationStyle="Cell"
+                                               DataNavigatorButtons="Navigation, Editing"
+                                               AllowEditing="True"
+                                               AutoWidth="True"/>
+                            </dxg:GridControl.View>
+                            <dxg:GridColumn FieldName="ParameterCode" Header="参数代码" Width="180"/>
+                            <dxg:GridColumn FieldName="ParameterType" Header="类型" Width="60"/>
+                            <dxg:GridColumn FieldName="Description" Header="描述" Width="250"/>
+                            <dxg:GridColumn FieldName="TargetValue" Header="目标值" Width="90"/>
+                            <dxg:GridColumn FieldName="UpperSpecificationsLimit" Header="规格上限" Width="90"/>
+                            <dxg:GridColumn FieldName="LowerSpecificationsLimit" Header="规格下限" Width="90"/>
+                            <dxg:GridColumn FieldName="UpperControlLimit" Header="控制上限" Width="90"/>
+                            <dxg:GridColumn FieldName="LowerControlLimit" Header="控制下限" Width="90"/>
+                            <dxg:GridColumn FieldName="UOMCode" Header="UOM" Width="60"/>
+                        </dxg:GridControl>
+                    </StackPanel>
+                </Border>
 
-                                <RadioButton Content="On" IsChecked="True" Margin="20,0,20,0" Width="96"/>
-                                <RadioButton Content="Off"/>
-                            </StackPanel>
+                <!-- ═══ PLC 连接 ═══ -->
+                <TextBlock Text="PLC 连接配置" Style="{StaticResource SectionHeaderStyle}"/>
+                <Border Background="White" BorderBrush="#E8E8E8" BorderThickness="1"
+                        CornerRadius="6" Padding="24">
+                    <StackPanel>
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="PLC IP 地址" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding PLC_IP}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="PLC 端口" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding PLC_Port}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="PLC SA (站号)" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding PLC_SA}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ PLC 信号配置表 ═══ -->
+                <TextBlock Text="PLC 信号地址表" Style="{StaticResource SectionHeaderStyle}"/>
+                <Border Background="White" BorderBrush="#E8E8E8" BorderThickness="1"
+                        CornerRadius="6" Padding="12">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <Button x:Name="plcBtnRefresh" Padding="10,5"
+                                    Margin="0,0,8,0"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <md:PackIcon Kind="Refresh" Width="16" Height="16"
+                                                 VerticalAlignment="Center"/>
+                                    <TextBlock Text="刷新" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="plcBtnSave" Padding="10,5"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <md:PackIcon Kind="ContentSave" Width="16" Height="16"
+                                                 VerticalAlignment="Center"/>
+                                    <TextBlock Text="保存" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
-                    </Border>
-                    <TextBlock Text="产品型号" FontSize="18" FontWeight="Bold" Margin="0,0,0,25"/>
-                    <Border Background="White" BorderBrush="#E6E6E6" BorderThickness="1" CornerRadius="3" Padding="30" Margin="0,0,0,20">
-                        <StackPanel>
-                            <TextBlock Text="电芯型号" FontSize="11" FontWeight="Bold" Foreground="#3C3C3C" Margin="0,0,0,15"/>
-                            <TextBlock Text="电芯型号修改后会影响MOM的提交结果" FontSize="13" Foreground="#191919" TextWrapping="Wrap" Margin="0,0,0,20"/>
 
-                            <Grid Height="35">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox VerticalContentAlignment="Center" 
-                                         Style="{StaticResource MaterialDesignFilledTextBox }"
-                                         Padding="10,0" BorderBrush="#CCCCCC" 
-                                         Tag="输入电芯型号"/>
-                                <Button Grid.Column="1" Content="确认" Width="80" Margin="10,0,0,0"    Style="{StaticResource MaterialDesignOutlinedButton}"/>
-                            </Grid>
-                        </StackPanel>
-                    </Border>
+                        <dxg:GridControl x:Name="PLCGridControl"
+                                         Height="350"
+                                         ItemsSource="{Binding PLCAddressList, UpdateSourceTrigger=PropertyChanged}">
+                            <dxg:GridControl.View>
+                                <dxg:TableView x:Name="PLCGridView"
+                                               ShowDataNavigator="True"
+                                               NavigationStyle="Cell"
+                                               DataNavigatorButtons="Navigation, Editing"
+                                               AllowEditing="True"
+                                               AutoWidth="True"/>
+                            </dxg:GridControl.View>
+                            <dxg:GridColumn FieldName="Name" Header="信号名称" Width="220"/>
+                            <dxg:GridColumn FieldName="Adress" Header="地址" Width="100"/>
+                            <dxg:GridColumn FieldName="Type" Header="类型" Width="100"/>
+                            <dxg:GridColumn FieldName="Mode" Header="模式" Width="80"/>
+                        </dxg:GridControl>
+                    </StackPanel>
+                </Border>
 
-                    <Border Background="#FFF8F8" BorderBrush="#FFCCCC" BorderThickness="1" CornerRadius="3" Padding="30">
-                        <DockPanel>
-                            <StackPanel DockPanel.Dock="Left">
-                                <TextBlock Text="注销账户" FontSize="11" FontWeight="Bold" Foreground="#CC0000" Margin="0,0,0,10"/>
-                                <TextBlock Text="注销当前账户并删除所有用户数据" FontSize="13" Foreground="#191919"/>
-                            </StackPanel>
-                            <Button Content="注销" DockPanel.Dock="Right" BorderThickness="0"  VerticalAlignment="Center" Foreground="#0057FF" FontWeight="Bold" Background="Transparent"  />
-                        </DockPanel>
-                    </Border>
+                <!-- ═══ 设备信息 ═══ -->
+                <TextBlock Text="设备信息" Style="{StaticResource SectionHeaderStyle}"/>
+                <Border Background="White" BorderBrush="#E8E8E8" BorderThickness="1"
+                        CornerRadius="6" Padding="24">
+                    <StackPanel>
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="设备编号" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding EquipmentCode}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
 
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="电芯型号" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding 电芯型号}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
 
-                    <TextBlock Text="MOM参数配置" FontSize="18" FontWeight="Bold" Margin="0,20,0,25"/>
-                    <Border Background="White" BorderBrush="#E6E6E6" BorderThickness="1" CornerRadius="3"   Width="750">
-                        <StackPanel>
-                            <Grid Height="35">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions> 
-                                <!-- 刷新 -->
-                                <Button x:Name="momBtnRefresh" Padding="14,7"
-                                        Grid.Column="0"
-                                        Margin="5,0,0,0"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"
-                                        
-                                        md:ButtonAssist.CornerRadius="6">
-                                    <StackPanel Orientation="Horizontal"  >
-                                        <md:PackIcon Margin="4,0,0,0" Kind="Refresh" Width="16" Height="16" VerticalAlignment="Center"/>
-                                        <TextBlock Margin="4,0,0,0" Text="刷新" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
-                                <!-- 保存 -->
-                                <Button x:Name="momBtnSave" Padding="14,7"
-                                        Grid.Column="2"
-                                        Margin="5,0,0,0"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"
-                                        md:ButtonAssist.CornerRadius="6">
-                                    <StackPanel Orientation="Horizontal"  >
-                                        <md:PackIcon Margin="4,0,0,0" Kind="ContentSave" Width="16" Height="16" VerticalAlignment="Center"/>
-                                        <TextBlock Margin="4,0,0,0" Text="保存" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
-                            </Grid>
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="软件标识" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding Software}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
 
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left"  Height="550" Width="1000" VerticalAlignment="Top">
+                <!-- 底部间距 -->
+                <TextBlock Height="40"/>
 
-                                <dxg:GridControl   x:Name="MOMgridControl" 
-                                                    
-                                                   VerticalAlignment="Top" 
-                                                   HorizontalAlignment="Left"
-                                                   ItemsSource="{Binding ParamList, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="550" Width="1400">
-                                    <dxg:GridControl.View>
-                                        <dxg:TableView HorizontalAlignment="Left" 
-                                                        AllowHorizontalScrollingVirtualization="True"
-                                                        ScrollingMode="Smart"
-                                                       ShowDataNavigator="True"
-                                                       NavigationStyle="Cell"
-                                                       DataNavigatorButtons="Navigation, Editing"
-                                                        WaitIndicatorType="Panel"
-                                                        HorizontalScrollbarVisibility="Auto"
-                                                        x:Name="MOMGridView" AllowPerPixelScrolling="True" 
-                                                        AllowMoveColumnToDropArea="False"
-                                                        AllowScrollingOnDrag="False"
-                                                        AllowEditing="True" 
-                                                        Width="700">
-                                            <dxg:TableView.RuntimeLocalizationStrings>
-                                                <dxg:GridRuntimeStringCollection>
-                                                    <dxg:RuntimeStringIdInfo Id="GridGroupPanelText" Value=" "/>
-                                                </dxg:GridRuntimeStringCollection>
-                                            </dxg:TableView.RuntimeLocalizationStrings>
-                                        </dxg:TableView>
-                                    </dxg:GridControl.View>
-                                    <dxg:GridColumn FieldName="ParameterCode" Header="参数代码" Width="200"/>
-                                    <dxg:GridColumn FieldName="ParameterType" Header="参数类型" Width="50"/>
-                                    <dxg:GridColumn FieldName="Description" Header="描述" Width="300"/>
-                                    <dxg:GridColumn FieldName="TargetValue" Header="目标值" Width="100"/>
-                                    <dxg:GridColumn FieldName="UpperSpecificationsLimit" Header="规格上限" Width="100"/>
-                                    <dxg:GridColumn FieldName="LowerSpecificationsLimit" Header="规格下限" Width="100"/>
-                                    <dxg:GridColumn FieldName="UpperControlLimit" Header="控制上限" Width="100"/>
-                                    <dxg:GridColumn FieldName="LowerControlLimit" Header="控制下限" Width="100"/>
-                                    <dxg:GridColumn FieldName="UOMCode" Header="UOMCode" Width="100"/>
-                                </dxg:GridControl>
-
-
-                            </StackPanel>
-
-                        </StackPanel>
-                    </Border>
-                    <TextBlock Text="PLC参数配置" FontSize="18" FontWeight="Bold" Margin="0,20,0,25"/>
-                    <Border Background="White" BorderBrush="#E6E6E6" BorderThickness="1" CornerRadius="3" Margin="0,0,0,20" Width="750">
-                        <StackPanel>
-                            <Grid Height="35">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <!-- 刷新 -->
-                                <Button x:Name="plcBtnRefresh" Padding="14,7"
-                                        Grid.Column="0"
-                                        Margin="5,0,0,0"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"
-        
-                                        md:ButtonAssist.CornerRadius="6">
-                                    <StackPanel Orientation="Horizontal"  >
-                                        <md:PackIcon Margin="4,0,0,0" Kind="Refresh" Width="16" Height="16" VerticalAlignment="Center"/>
-                                        <TextBlock Margin="4,0,0,0" Text="刷新" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
-                                <!-- 保存 -->
-                                <Button x:Name="plcBtnSave" Padding="14,7"
-                                        Grid.Column="2"
-                                        Margin="5,0,0,0"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"
-                                        md:ButtonAssist.CornerRadius="6">
-                                    <StackPanel Orientation="Horizontal"  >
-                                        <md:PackIcon Margin="4,0,0,0" Kind="ContentSave" Width="16" Height="16" VerticalAlignment="Center"/>
-                                        <TextBlock Margin="4,0,0,0" Text="保存" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
-                            </Grid>
-
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left"  Height="550" Width="1000" VerticalAlignment="Top">
-
-                                <dxg:GridControl   x:Name="PLCGridControl" 
-                                                
-                                                VerticalAlignment="Top" 
-                                                HorizontalAlignment="Left" 
-                                                ItemsSource="{Binding PLCAddressList, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                Height="550" Width="1400">
-                                    <dxg:GridControl.View>
-                                        <dxg:TableView HorizontalAlignment="Left" 
-                                                        AllowHorizontalScrollingVirtualization="True"
-                                                        ScrollingMode="Smart"
-                                                       ShowDataNavigator="True"
-                                                       NavigationStyle="Cell"
-                                                       DataNavigatorButtons="Navigation, Editing"
-                                                        WaitIndicatorType="Panel"
-                                                        HorizontalScrollbarVisibility="Auto"
-                                                          AllowPerPixelScrolling="True" 
-                                                        AllowMoveColumnToDropArea="False"
-                                                        AllowScrollingOnDrag="False"
-                                                        AllowEditing="True" 
-                                                        Width="700"
-                                                        x:Name="PLCGridView" >
-                                            <dxg:TableView.RuntimeLocalizationStrings>
-                                                <dxg:GridRuntimeStringCollection>
-                                                    <dxg:RuntimeStringIdInfo Id="GridGroupPanelText" Value=" "/>
-                                                </dxg:GridRuntimeStringCollection>
-                                            </dxg:TableView.RuntimeLocalizationStrings>
-                                        </dxg:TableView>
-                                    </dxg:GridControl.View>
-                                    <dxg:GridColumn FieldName="Name" Header="信号名称" Width="200"/>
-                                    <dxg:GridColumn FieldName="Adress" Header="地址" Width="50"/>
-                                    <dxg:GridColumn FieldName="Type" Header="类型" Width="300"/>
-                                    <dxg:GridColumn FieldName="Mode" Header="模式" Width="100"/>
-                                </dxg:GridControl>
-
-
-                            </StackPanel>
-
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-            </ScrollViewer>
-        </Grid>
+            </StackPanel>
+        </ScrollViewer>
     </Grid>
 </UserControl>

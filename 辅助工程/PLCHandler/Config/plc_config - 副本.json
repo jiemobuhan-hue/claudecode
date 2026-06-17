@@ -1,0 +1,44 @@
+[
+  {
+    "id": "omron_local_1",
+    "name": "Omron PLC #1",
+    "brand": "Omron",
+    "ipAddress": "127.0.0.1",
+    "port": 9600,
+    "slot": 0,
+    "channel": 0,
+    "group": "Omron",
+    "isEnabled": true,
+    "pollingIntervalMs": 500,
+    "connectionTimeoutMs": 3000,
+    "reconnectIntervalMs": 5000
+  },
+  {
+    "id": "omron_local_2",
+    "name": "Omron PLC #2",
+    "brand": "Omron",
+    "ipAddress": "127.0.0.1",
+    "port": 9601,
+    "slot": 0,
+    "channel": 0,
+    "group": "Omron",
+    "isEnabled": true,
+    "pollingIntervalMs": 500,
+    "connectionTimeoutMs": 3000,
+    "reconnectIntervalMs": 5000
+  },
+  {
+    "id": "siemens_local_1",
+    "name": "Siemens S7-1200",
+    "brand": "Siemens",
+    "ipAddress": "127.0.0.1",
+    "port": 102,
+    "slot": 1,
+    "channel": 0,
+    "group": "Siemens",
+    "isEnabled": true,
+    "pollingIntervalMs": 500,
+    "connectionTimeoutMs": 3000,
+    "reconnectIntervalMs": 5000
+  }
+]

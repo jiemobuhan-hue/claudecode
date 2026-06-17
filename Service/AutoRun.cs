@@ -9,7 +9,8 @@ using PLCHandler.Models;
 using RinKit;
 using System;
 using System.Collections;
-using System.Collections.Generic; 
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -35,6 +36,9 @@ namespace ZenergyBFSI.Model
         //public List<CellState> ListState { get; set; } = new List<CellState>();
         public List<CellData> ListData { get; set; } = new List<CellData>();
         public int Flag_Error { get; set; } = 0;
+        public ConcurrentDictionary<int, StationState> StationStates => _stationStates;
+        public AutomatonState CurrentAutomatonState => _automatonState;
+        public GlobalHeartbeatState CurrentHeartbeatState => _heartbeatState;
         public int Power { get; set; } = 0;
         public int LossCount { get; set; } = 0;//注液偏差计数
         public long TS { get; set; } = -1; 
@@ -61,10 +65,14 @@ namespace ZenergyBFSI.Model
             Recovering   // 心跳恢复中（等待确认稳定）
         }
 
-        private GlobalHeartbeatState _heartbeatState = GlobalHeartbeatState.Healthy;
+        private volatile GlobalHeartbeatState _heartbeatState = GlobalHeartbeatState.Healthy;
         private DateTime _heartbeatLostTime;         // 心跳丢失时刻
         private int _heartbeatRecoveringConfirmMs = 2000; // 心跳恢复确认时间（毫秒）
         private volatile bool _globalPaused = false; // 全局暂停标志（所有工站共享）
+
+        private readonly ConcurrentDictionary<int, StationState> _stationStates
+            = new ConcurrentDictionary<int, StationState>();
+        private volatile AutomatonState _automatonState = AutomatonState.Stopped;
 
 
         private PlcMonitor _monitor;
@@ -273,7 +281,8 @@ namespace ZenergyBFSI.Model
         #endregion
 
         #region 配置初始化需要的字段
-        private const string CONNECTION_STRINGA = "Data Source=DESKTOP-0F9L4KO\\RJ;Initial Catalog=VisionProgram;User ID=merj;Password=1234@abcD;TrustServerCertificate=True";
+        private string GetVisionConnectionString() =>
+            $"Data Source={Settings.SQLServer视觉地址};Initial Catalog={Settings.SQLServer视觉库名};User ID={Settings.SQLServer视觉用户};Password={Settings.SQLServer视觉密码};TrustServerCertificate=True";
 
         private HarnessMeasureRepository _localHarnessMeasureRepositoryA;
         private BlueFilmDetectionRepository _localBlueFilmDetectionRepositoryA; 
@@ -308,8 +317,8 @@ namespace ZenergyBFSI.Model
                 //初始化数据库脚本
                 //TODO
                 //在这里初始化所有的视觉工控机的SQLserver连接
-                _localHarnessMeasureRepositoryA = new HarnessMeasureRepository(CONNECTION_STRINGA);
-                _localBlueFilmDetectionRepositoryA = new BlueFilmDetectionRepository(CONNECTION_STRINGA);
+                _localHarnessMeasureRepositoryA = new HarnessMeasureRepository(GetVisionConnectionString());
+                _localBlueFilmDetectionRepositoryA = new BlueFilmDetectionRepository(GetVisionConnectionString());
                 var x = DashboardService.I;
                 //初始化工站数据
                 //TODO
@@ -326,6 +335,8 @@ namespace ZenergyBFSI.Model
                 _cts = new CancellationTokenSource();
                 InspectionInit();
                 Task.Run(() => Thread_Run());
+                for (int i = 1; i <= 8; i++)
+                    _stationStates[i] = StationState.Idle;
                 //ResetIO();
                 UC_Operation.I.WriteLog($"自动机初始化成功", "Info");
                 return true;
@@ -362,6 +373,7 @@ namespace ZenergyBFSI.Model
             var stationTasks = stations.Select(s => Task.Run(() => s.RunAsync(_cts.Token), _cts.Token)).ToArray();
 
             UC_Operation.I.WriteLog($"自动机启动，8个工位独立运行", "Info");
+            _automatonState = AutomatonState.Running;
 
             // 主循环：统一心跳检测（所有工站共享）
             while (_running && !_cts.Token.IsCancellationRequested)
@@ -405,6 +417,7 @@ namespace ZenergyBFSI.Model
                 Rlog.Error($"自动机异常: {ex.Message}");
             }
 
+            _automatonState = AutomatonState.Stopped;
             UC_Operation.I.WriteLog($"自动机已停止", "Info");
         }
 
@@ -413,6 +426,9 @@ namespace ZenergyBFSI.Model
         /// </summary>
         private void OnStationStateChanged(int stationId, StationState newState)
         {
+            _stationStates[stationId] = newState;
+            if (newState == StationState.Error)
+                _automatonState = AutomatonState.Error;
             UC_Operation.I.WriteLog($"工位{stationId}状态 → {newState}", "Debug");
         }
 
@@ -484,15 +500,17 @@ namespace ZenergyBFSI.Model
         /// 设备链接状态检测 — 使用 PLCHandler 辅助工程
         /// 检查主 PLC (omron_1) 的连接状态，断联时只报警不影响其它流程
         /// </summary>
+        private int _heartbeatToggle = 0;
+
         private async Task<bool> DeviceLinkAsync()
         {
             if (_monitor != null && _monitor.IsConnected("omron_1") && _monitor.IsConnected("omron_2"))
             {
-                await SetInt_Plc("PLC心跳响应", 1);
-                await SetInt_Plc("出站心跳", 1);
+                _heartbeatToggle = 1 - _heartbeatToggle;
+                await SetInt_Plc("PLC心跳响应", _heartbeatToggle);
+                await SetInt_Plc("出站心跳", _heartbeatToggle);
                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    Main.uC_StatesBar.uC_StatesBarVM.IsMomConnected = true;
                     Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = System.Windows.Media.Brushes.LimeGreen;
                 });
                 return true;
@@ -503,7 +521,6 @@ namespace ZenergyBFSI.Model
                 await SetInt_Plc("出站心跳", 0);
                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    Main.uC_StatesBar.uC_StatesBarVM.IsMomConnected = false;
                     Main.uC_StatesBar.uC_StatesBarVM.PlcStatusColor = System.Windows.Media.Brushes.Red;
                 });
                 return false;
@@ -1561,22 +1578,6 @@ namespace ZenergyBFSI.Model
                     var temp = new List<CellData> { data };
                     SQLiteGenericHelper.BulkUpsert<CellData>(temp, "电芯码", "CellData");
 
-                    #region 模拟数据
-                    // 在真实入站记录之外额外插入模拟记录，让看板"检测中"计数和时段分布有数据可看。
-                    // 正式环境删除此 region。
-                    var simData = new CellData()
-                    {
-                        电芯码 = $"SIM-{_channelNo}-{DateTime.Now:HHmmss}",
-                        检验位置 = $"工位{_channelNo}",
-                        进站时间 = DateTime.Now.AddMinutes(-new Random().Next(1, 60)).ToString("yyyy/MM/dd HH:mm:ss"),
-                        入站结果 = "OK",
-                        MOM查询来料状态 = "模拟-OK",
-                        是否复投 = "否",
-                    };
-                    var simList = new List<CellData> { simData };
-                    //SQLiteGenericHelper.BulkUpsert<CellData>(simList, "电芯码", "CellData");
-                    #endregion
-
                     _state.LastCode = code;
                     _state.LastProcessTime = DateTime.Now.Ticks;
                 }
@@ -1738,9 +1739,7 @@ namespace ZenergyBFSI.Model
                         }
 
                         int way = _owner.getlead(data);
-                        way = 1; // TODO: 后续移除硬编码 
-                        int randnum = new Random(Guid.NewGuid().GetHashCode()).Next(1, 7);
-                        #region 随机复投和NG
+
                         switch (way)
                         {
                             case 1: data.视觉检测结果 = "结果一"; break;
@@ -1748,41 +1747,16 @@ namespace ZenergyBFSI.Model
                             case 3: data.视觉检测结果 = "结果三"; break;
                             case 4: data.视觉检测结果 = "结果四"; break;
                         }
-                        if (randnum == 1)
-                        { 
-                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
-                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 7);
-                            Rlog.Info($"工位{_channelNo} 出料模拟OK{randnum}");
+                        if (data.出站结果 == "OK")
+                        {
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", way);
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", way);
                         }
                         else
                         {
                             await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
-                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 7);
-                            Rlog.Info($"工位{_channelNo} 出料模拟NG或复投{randnum}");
+                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 2);
                         }
-
-                        #endregion
-
-                        #region 真实数据
-
-                        //switch (way)
-                        //{
-                        //    case 1: data.视觉检测结果 = "结果一"; break;
-                        //    case 2: data.视觉检测结果 = "结果二"; break;
-                        //    case 3: data.视觉检测结果 = "结果三"; break;
-                        //    case 4: data.视觉检测结果 = "结果四"; break;
-                        //}
-                        //if (data.出站结果 == "OK")
-                        //{
-                        //    await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", way);
-                        //    await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", way);
-                        //}
-                        //else
-                        //{
-                        //    await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
-                        //    await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 2);
-                        //}
-                        #endregion
 
 
                         var temp = new List<CellData> { data };
@@ -1793,21 +1767,9 @@ namespace ZenergyBFSI.Model
                     }
                     else
                     {
-                        int randnum2 = new Random(Guid.NewGuid().GetHashCode()).Next(1,7);
-                        //int randomNumber = _rnd.Value.Next(2, 100);
-
-                        if (randnum2 == 1)
-                        {
-                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
-                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 7);
-                            Rlog.Info($"工位{_channelNo} 出料模拟OK{randnum2}");
-                        }
-                        else
-                        {
-                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 2);
-                            await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 7);
-                            Rlog.Info($"工位{_channelNo} 出料模拟NG或复投{randnum2}");
-                        }
+                        await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 0);
+                        await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 0);
+                        Rlog.Warn($"工位{_channelNo} 未找到电芯码 {tempcode} 的CellData记录");
                     }
                 }
                 catch (Exception ex)

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema xmlns:tns="http://schemas.datacontract.org/2004/07/Apriso.MIPlugins.Communication.Core" xmlns:ser="http://schemas.microsoft.com/2003/10/Serialization/" elementFormDefault="qualified" targetNamespace="http://schemas.datacontract.org/2004/07/Apriso.MIPlugins.Communication.Core" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:import schemaLocation="http://10.6.33.3:8007/wcfhttpservice?xsd=xsd1" namespace="http://schemas.microsoft.com/2003/10/Serialization/" />
+  <xs:complexType name="MessageRequest">
+    <xs:complexContent mixed="false">
+      <xs:extension base="tns:Message">
+        <xs:sequence>
+          <xs:element name="CommandId" nillable="true" type="xs:string" />
+          <xs:element name="CommandRequestJson" nillable="true" type="xs:string" />
+          <xs:element name="MessageGuid" type="ser:guid" />
+          <xs:element name="RequestDate" type="xs:dateTime" />
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+  <xs:element name="MessageRequest" nillable="true" type="tns:MessageRequest" />
+  <xs:complexType name="Message">
+    <xs:sequence />
+  </xs:complexType>
+  <xs:element name="Message" nillable="true" type="tns:Message" />
+  <xs:complexType name="MessageResponse">
+    <xs:complexContent mixed="false">
+      <xs:extension base="tns:Message">
+        <xs:sequence>
+          <xs:element name="CommandId" nillable="true" type="xs:string" />
+          <xs:element name="CommandResponseJson" nillable="true" type="xs:string" />
+          <xs:element name="ErrorCode" nillable="true" type="xs:string" />
+          <xs:element name="ErrorMessage" nillable="true" type="xs:string" />
+          <xs:element name="MessageGuid" type="ser:guid" />
+          <xs:element name="ResponseDate" type="xs:dateTime" />
+          <xs:element name="Success" type="xs:boolean" />
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+  <xs:element name="MessageResponse" nillable="true" type="tns:MessageResponse" />
+</xs:schema>

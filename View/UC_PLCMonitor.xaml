@@ -1,0 +1,12 @@
+﻿<UserControl xmlns:View="clr-namespace:PLCHandler.Control.View;assembly=PLCHandler"  x:Class="ZenergyBFSI.View.UC_PLCMonitor"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:ZenergyBFSI.View"
+             mc:Ignorable="d" 
+             d:DesignHeight="885" d:DesignWidth="1601">
+    <Grid  >
+        <View:PLCBoard x:Name="xPLCHandler" />
+    </Grid>
+</UserControl>

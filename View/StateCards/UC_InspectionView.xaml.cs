@@ -68,6 +68,11 @@ namespace ZenergyBFSI.View.StateCards
 
                 BtnPrev.IsEnabled = pageIndex > 0;
                 BtnNext.IsEnabled = (pageIndex + 1) < totalPages;
+
+                #region 2026-05-25 搜索加载动画
+                PbSearch.Visibility = Visibility.Collapsed;
+                BtnSearch.IsEnabled = true;
+                #endregion
             });
         }
 
@@ -85,6 +90,7 @@ namespace ZenergyBFSI.View.StateCards
         /// 某图片复检保存成功后调用，刷新卡片状态。
         /// 若放大弹窗仍打开，同步刷新右侧历史记录显示。
         /// </summary>
+        /// <summary>整图复检保存成功（向后兼容）</summary>
         public void OnReviewSaved(string imageId, string result,
                                   string user, string comment)
         {
@@ -99,14 +105,44 @@ namespace ZenergyBFSI.View.StateCards
                 img.ManualComment = comment;
                 img.ManualTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
-                // 更新对应卡片底部的 Badge
                 if (_cardMap.TryGetValue(imageId, out var card))
                     RefreshCardFooter(card, img);
+            });
+        }
 
-                // 若弹窗显示的正是这张图，刷新历史记录
-                if (GridOverlay.Visibility == Visibility.Visible &&
-                    _images[_zoomIdx].ImageId == imageId)
-                    PopulateHistoryPanel(img);
+        /// <summary>缺陷级复检保存成功，更新 DefectRegion.Status 并刷新 UI</summary>
+        public void OnDefectReviewSaved(string defectId, string result,
+                                        string user, string comment)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                ImageRecord targetImg = null;
+                DefectRegion targetDefect = null;
+
+                foreach (var img in _images)
+                {
+                    var d = img.Defects?.FirstOrDefault(x => x.DefectId == defectId);
+                    if (d != null) { targetImg = img; targetDefect = d; break; }
+                }
+                if (targetDefect == null) return;
+
+                targetDefect.Status = result == "OK" ? ReviewStatus.OK : ReviewStatus.NG;
+                targetDefect.ReviewUser = user;
+                targetDefect.ReviewComment = comment;
+                targetDefect.ReviewTime = DateTime.Now;
+
+                // 刷新第一层卡片
+                if (_cardMap.TryGetValue(targetImg.ImageId, out var card))
+                    RefreshCardFooter(card, targetImg);
+
+                // 刷新第二层缺陷列表 + Canvas 标注
+                if (GridOverlay.Visibility == Visibility.Visible
+                    && _images[_zoomIdx].ImageId == targetImg.ImageId)
+                {
+                    IcDefects.ItemsSource = null;
+                    IcDefects.ItemsSource = targetImg.Defects;
+                    DrawDefectRects(targetImg);
+                }
             });
         }
 
@@ -258,8 +294,8 @@ namespace ZenergyBFSI.View.StateCards
         private async Task UC_InspectionView_SearchRequestedAsync(object sender, SearchArgs e)
         {
 
-            var datafrom = DpFrom.DisplayDate.ToString("yyyy-MM-dd");
-            var dataTo = DpTo.DisplayDate.ToString("yyyy-MM-dd"); 
+            var datafrom = DpFrom.SelectedDate.Value.ToString("yyyy-MM-dd"); ;
+            var dataTo = DpTo.SelectedDate.Value.ToString("yyyy-MM-dd"); 
             string networkPath = @"\\192.168.1.33\d\CameraRaw\" +$"{dataTo}" ; // 1. 定义UNC路径
             if (!Directory.Exists(networkPath))
             {
@@ -268,53 +304,47 @@ namespace ZenergyBFSI.View.StateCards
                 return;
             }
 
-            var result = new List<string>();
+            #region 2026-05-25 搜索加载动画
+            PbSearch.Visibility = Visibility.Visible;
+            BtnSearch.IsEnabled = false;
+            #endregion
 
-            // 异步搜索（若需要同步则直接调用同步方法）
-            var matchedFiles =await Task.Run(() => SearchFilesByCellCode(networkPath, e.CellCode));
-
-
-            var x = e.CellCode;
-             List<InspectionRecord> temppic = new();
-
-            List<string> NGFiles = new List<string>();
-            List<string> OKFiles = new List<string>();
-            foreach (var pathfiles in matchedFiles)
+            #region 2026-05-25 搜索优化：EnumerateDirectories + 单次 EnumerateFiles 替代三次递归
+            // cellCode 在目录名（非文件名），先匹配目录，再每目录单次 EnumerateFiles 分类
+            var temppic = await Task.Run(() =>
             {
-                // 递归搜索该子文件夹下所有 *__OK.bmp 文件
-                var files = Directory.GetFiles(pathfiles, "*__NG.bmp", SearchOption.AllDirectories);
-                NGFiles.AddRange(files);
-                var files2 = Directory.GetFiles(pathfiles, "*__OK.bmp", SearchOption.AllDirectories);
-                OKFiles.AddRange(files2);
-                if (NGFiles.Count > 0)
+                var records = new List<InspectionRecord>();
+                try
                 {
-                    temppic.Add(new InspectionRecord()
+                    foreach (var dir in Directory.EnumerateDirectories(
+                        networkPath, $"*{e.CellCode}*", SearchOption.AllDirectories))
                     {
-                        CellCode = System.IO.Path.GetFileName(pathfiles),
-                        LineId = "LineId1",
-                        OverallResult = "NG",
-                        NgTypes = $"{NGFiles.Count}",
-                        DateTime = dataTo,
-                        StationId = "StationIdA",
-                        ProcessMs = 1,
-                        Recordpath = pathfiles
-                    });
+                        int ngCount = 0, okCount = 0;
+                        foreach (var file in Directory.EnumerateFiles(
+                            dir, "*__*.bmp", SearchOption.AllDirectories))
+                        {
+                            if (file.EndsWith("__NG.bmp")) ngCount++;
+                            else okCount++;
+                        }
+
+                        records.Add(new InspectionRecord()
+                        {
+                            CellCode = System.IO.Path.GetFileName(dir),
+                            LineId = "LineId1",
+                            OverallResult = ngCount > 0 ? "NG" : "OK",
+                            NgTypes = ngCount > 0 ? $"{ngCount}" : $"{okCount}",
+                            DateTime = dataTo,
+                            StationId = "StationIdA",
+                            ProcessMs = 1,
+                            Recordpath = dir
+                        });
+                    }
                 }
-                else
-                {
-                    temppic.Add(new InspectionRecord()
-                    {
-                        CellCode = System.IO.Path.GetFileName(pathfiles),
-                        LineId = "LineId1",
-                        OverallResult = "OK",
-                        NgTypes = $"{OKFiles.Count}",
-                        DateTime = dataTo,
-                        StationId = "StationIdA",
-                        ProcessMs = 1,
-                        Recordpath = pathfiles
-                    });
-                }
-            }
+                catch { }
+
+                return records;
+            });
+            #endregion
 
             SetSearchResults(temppic, 5, 0, 5);
         }
@@ -416,13 +446,23 @@ namespace ZenergyBFSI.View.StateCards
             _cardMap.Clear();
             _placeholders.Clear();
             TxtImgCount.Text = $"{_images.Count} 张图片";
+            #region 2026-05-25 图片加载动画
+            PbImageLoad.Visibility = Visibility.Visible;
+            #endregion
+
+            // 确保每张图片有缺陷数据（后续替换为数据库查询）
+            foreach (var img in _images)
+            {
+                if (img.Defects == null || img.Defects.Count == 0)
+                    img.Defects = ImageRecord.GenerateDefaultDefects();
+            }
 
             // ① 同步渲染占位卡片（无图片加载，<100ms）
             for (int i = 0; i < _images.Count; i++)
             {
                 var img = _images[i];
                 var idx = i;
-                var placeholder = BuildPlaceholderCard(img, () => OpenZoom(idx));
+                var placeholder = BuildPlaceholderCard(img, () => OpenDefectMap(idx));
                 _cardMap[img.ImageId] = placeholder;
                 _placeholders.Add(placeholder);
                 WpImages.Children.Add(placeholder);
@@ -459,7 +499,16 @@ namespace ZenergyBFSI.View.StateCards
                         // 单张加载失败不影响其余图片
                     }
                 }
-            }, token);
+            }, token)
+            .ContinueWith(_ =>
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    #region 2026-05-25 图片加载完成
+                    PbImageLoad.Visibility = Visibility.Collapsed;
+                    #endregion
+                });
+            });
         }
 
         /// <summary>
@@ -540,6 +589,48 @@ namespace ZenergyBFSI.View.StateCards
                 visionRow.Children.Add(MakeTag(img.NgType));
             info.Children.Add(visionRow);
 
+            // ── 缺陷统计标签 ────────────────────────────────────
+            var defects = img.Defects;
+            if (defects != null && defects.Count > 0)
+            {
+                var defectTags = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+                foreach (var g in defects.GroupBy(d => d.DefectType))
+                {
+                    var typeColor = DefectTypeToColorConverter.GetColor(g.Key);
+                    defectTags.Children.Add(new Border
+                    {
+                        CornerRadius = new CornerRadius(3),
+                        Padding = new Thickness(5, 1, 5, 1),
+                        Margin = new Thickness(0, 0, 4, 2),
+                        Background = new SolidColorBrush(Color.FromArgb(0x30, typeColor.R, typeColor.G, typeColor.B)),
+                        Child = new TextBlock
+                        {
+                            Text = $"{g.Key} ×{g.Count()}",
+                            FontSize = 10,
+                            Foreground = new SolidColorBrush(typeColor)
+                        }
+                    });
+                }
+                // 复判进度
+                int reviewed = defects.Count(d => d.Status != ReviewStatus.Unreviewed);
+                if (reviewed > 0)
+                {
+                    defectTags.Children.Add(new Border
+                    {
+                        CornerRadius = new CornerRadius(3),
+                        Padding = new Thickness(5, 1, 5, 1),
+                        Background = new SolidColorBrush(Color.FromArgb(0x20, 0x4C, 0xAF, 0x50)),
+                        Child = new TextBlock
+                        {
+                            Text = $"已复判 {reviewed}/{defects.Count}",
+                            FontSize = 10,
+                            Foreground = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50))
+                        }
+                    });
+                }
+                info.Children.Add(defectTags);
+            }
+
             // ── 复检状态区（可重刷）──
             var footerHolder = new ContentControl { Tag = img.ImageId };
             info.Children.Add(footerHolder);
@@ -554,7 +645,7 @@ namespace ZenergyBFSI.View.StateCards
                 VerticalAlignment = System.Windows.VerticalAlignment.Top,
                 Margin = new Thickness(0, 6, 6, 0),
                 Opacity = 0,
-                ToolTip = "放大查看"
+                ToolTip = "缺陷地图"
             };
             zoomBtn.Content = new MaterialDesignThemes.Wpf.PackIcon
             {
@@ -733,29 +824,11 @@ namespace ZenergyBFSI.View.StateCards
         // 刷新卡片底部的复检状态
         private void RefreshCardFooter(Border card, ImageRecord img)
         {
-            //if (card.Tag is not (ImageRecord _, ContentControl holder, Action onZoom)) return;
-
-
-
-            ////if (card.Tag  is (ImageRecord _, ContentControl holder, Action onZoom))
-            ////{
-
-            //    //}
-            //    //else
-            //    //{
-            //    //    return;
-            //    //}
-            //if (card.Tag is ImageRecord)
-            //{
-            // var holder = card.content
-            //}
-            //else
-            //{
-            //    return;
-            //}
-            //holder.Content = img.IsManualReviewed
-            //    ? BuildReviewedFooter(img)
-            //    : BuildNotReviewedFooter(onZoom);
+            if (card.Tag is not ValueTuple<ImageRecord, ContentControl, Action> tuple) return;
+            var (_, holder, onZoom) = tuple;
+            holder.Content = img.IsManualReviewed
+                ? BuildReviewedFooter(img)
+                : BuildNotReviewedFooter(onZoom);
         }
 
         private UIElement BuildReviewedFooter(ImageRecord img)
@@ -798,57 +871,58 @@ namespace ZenergyBFSI.View.StateCards
         }
 
         // ════════════════════════════════════════════════════════
-        //  放大弹窗
+        //  第二层：缺陷地图弹窗
         // ════════════════════════════════════════════════════════
-        private void OpenZoom(int idx)
+        private void OpenDefectMap(int idx)
         {
             _zoomIdx = idx;
             _isZoomed = false;
+            BorderDefectPanel.Visibility = Visibility.Collapsed;
+            DefectDetailContainer.Content = null;
             GridOverlay.Visibility = Visibility.Visible;
-            PopulateZoom();
+            LoadDefectMap();
         }
 
         private void CloseOverlay()
         {
             GridOverlay.Visibility = Visibility.Collapsed;
-            TglOk.IsChecked = false;
-            TglNg.IsChecked = false;
+            DefectDetailContainer.Content = null;
+            BorderDefectPanel.Visibility = Visibility.Collapsed;
         }
 
-        private void PopulateZoom()
+        private void LoadDefectMap()
         {
             if (_images.Count == 0) return;
             var img = _images[_zoomIdx];
 
-            // 图片
-            ImgZoom.Source = File.Exists(img.ImagePath) ? LoadBitmapSafe(img.ImagePath) : null;
+            // 大图（优先 ThumbnailCache 2560px 缩略图）
+            if (File.Exists(img.ImagePath))
+            {
+                var cached = ThumbnailCache.GetOrCreate(img.ImagePath, decodeWidth: 2560);
+                ImgZoom.Source = cached != null
+                    ? new BitmapImage(new Uri(cached, UriKind.Absolute))
+                    : LoadBitmapSafe(img.ImagePath);
+            }
+            else
+            {
+                ImgZoom.Source = null;
+            }
             ImgZoom.RenderTransform = Transform.Identity;
             _isZoomed = false;
 
-            // 缺陷标注框
-            BboxCanvas.Children.Clear();
-            if (!string.IsNullOrEmpty(img.DefectBbox))
-                DrawBbox(img.DefectBbox);
+            // 绘制缺陷矩形
+            DrawDefectRects(img);
 
-            // 文本信息
+            // 绑定缺陷列表
+            var defects = img.Defects ?? new List<DefectRegion>();
+            IcDefects.ItemsSource = defects;
+            TxtNoDefects.Visibility = defects.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            // 标题
             TxtZoomCounter.Text = $"{_zoomIdx + 1} / {_images.Count}";
             TxtZoomAngle.Text = img.AngleName;
-            TxtZoomTitle.Text = $"{img.AngleName}";
+            TxtZoomTitle.Text = img.AngleName;
             TxtZoomStation.Text = $"工位 {img.StationId}";
-            TxtVisionResult.Text = img.VisionResult ?? "--";
-            TxtVisionScore.Text = $"{img.VisionScore * 100:F1}%";
-            PbScore.Value = img.VisionScore;
-            TxtNgType.Text = string.IsNullOrEmpty(img.NgType) ? "无" : img.NgType;
-            TxtBbox.Text = string.IsNullOrEmpty(img.DefectBbox) ? "--" : img.DefectBbox;
-
-            // 视觉结果颜色
-            bool vOk = img.VisionResult == "OK";
-            TxtVisionResult.Foreground = vOk
-                ? new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50))
-                : new SolidColorBrush(Color.FromRgb(0xF4, 0x43, 0x36));
-            BorderVision.Background = vOk
-                ? new SolidColorBrush(Color.FromArgb(0x20, 0x4C, 0xAF, 0x50))
-                : new SolidColorBrush(Color.FromArgb(0x20, 0xF4, 0x43, 0x36));
 
             // 导航按钮
             BtnPrevImg.IsEnabled = _zoomIdx > 0;
@@ -861,53 +935,149 @@ namespace ZenergyBFSI.View.StateCards
             BuildMinimap();
             SvZoom.ScrollChanged -= OnSvZoomScrollChanged;
             SvZoom.ScrollChanged += OnSvZoomScrollChanged;
-
-            // 防止拖拽出界后鼠标捕获丢失
             CanvasMinimap.LostMouseCapture -= OnMinimapLostCapture;
             CanvasMinimap.LostMouseCapture += OnMinimapLostCapture;
 
-            // 历史复检
-            PopulateHistoryPanel(img);
-
-            // 复检状态初始化
-            TglOk.IsChecked = img.IsManualReviewed && img.ManualResult == "OK";
-            TglNg.IsChecked = img.IsManualReviewed && img.ManualResult == "NG";
-            UpdateSubmitBtn();
-
-            // 小地图视口矩形延迟更新（等待 Canvas 完成 Measure/Arrange）
+            // 小地图视口延迟更新
             Dispatcher.BeginInvoke(new Action(() => UpdateMinimapRect()),
                 System.Windows.Threading.DispatcherPriority.Loaded);
+
+            // 图片加载后重新计算标注位置
+            ImgZoom.SizeChanged += (s, e) => DrawDefectRects(img);
+            SvZoom.ScrollChanged += (s, e) =>
+            {
+                if (e.ViewportWidthChange != 0 || e.ViewportHeightChange != 0)
+                    DrawDefectRects(img);
+            };
         }
 
-        private void DrawBbox(string bbox)
+        /// <summary>
+        /// 归一化坐标 → DefectCanvas 显示坐标，绘制半透明矩形。
+        /// </summary>
+        private void DrawDefectRects(ImageRecord img)
         {
-            // 格式: "x;y;w;h"（像素，相对原图）
-            var parts = bbox.Split(';');
-            if (parts.Length != 4) return;
-            if (!double.TryParse(parts[0], out double bx) ||
-                !double.TryParse(parts[1], out double by) ||
-                !double.TryParse(parts[2], out double bw) ||
-                !double.TryParse(parts[3], out double bh)) return;
+            DefectCanvas.Children.Clear();
+            if (img.Defects == null || img.Defects.Count == 0) return;
+            if (ImgZoom.Source is not BitmapSource bitmap || bitmap.PixelWidth <= 0) return;
 
-            // 换算为 Canvas 相对坐标（简化：假设图片充满 Canvas）
-            // 实际生产中需按图片原始分辨率与显示尺寸的比例换算
-            var rect = new Rectangle
+            double originalW = bitmap.PixelWidth;
+            double originalH = bitmap.PixelHeight;
+            double displayW = ImgZoom.ActualWidth;
+            double displayH = ImgZoom.ActualHeight;
+            if (displayW <= 0 || displayH <= 0) return;
+
+            double scale = Math.Min(displayW / originalW, displayH / originalH);
+            double offsetX = (displayW - originalW * scale) / 2;
+            double offsetY = (displayH - originalH * scale) / 2;
+
+            foreach (var defect in img.Defects)
             {
-                Stroke = new SolidColorBrush(Color.FromRgb(0xF4, 0x43, 0x36)),
-                StrokeThickness = 2,
-                Width = bw,
-                Height = bh,
-                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                double rx = Math.Max(0, offsetX + defect.X * originalW * scale);
+                double ry = Math.Max(0, offsetY + defect.Y * originalH * scale);
+                double rw = Math.Min(defect.Width * originalW * scale, displayW - rx);
+                double rh = Math.Min(defect.Height * originalH * scale, displayH - ry);
+                if (rw <= 2 || rh <= 2) continue;
+
+                var typeColor = DefectTypeToColorConverter.GetColor(defect.DefectType);
+                var fillColor = Color.FromArgb(0x20, typeColor.R, typeColor.G, typeColor.B);
+
+                var isHighlighted = _highlightedDefectId == defect.DefectId;
+
+                var rect = new Rectangle
                 {
-                    Color = Color.FromRgb(0xF4, 0x43, 0x36),
-                    BlurRadius = 8,
-                    ShadowDepth = 0,
-                    Opacity = 0.8
-                }
+                    Stroke = new SolidColorBrush(isHighlighted ? Colors.White : typeColor),
+                    StrokeThickness = isHighlighted ? 3 : 2,
+                    Fill = new SolidColorBrush(fillColor),
+                    Width = rw,
+                    Height = rh,
+                    Cursor = Cursors.Hand,
+                    Tag = defect
+                };
+                rect.MouseDown += DefectRect_MouseDown;
+                rect.MouseEnter += (s, e) =>
+                {
+                    if (_highlightedDefectId != defect.DefectId)
+                    {
+                        rect.Stroke = new SolidColorBrush(Colors.White);
+                        rect.StrokeThickness = 3;
+                    }
+                };
+                rect.MouseLeave += (s, e) =>
+                {
+                    if (_highlightedDefectId != defect.DefectId)
+                    {
+                        rect.Stroke = new SolidColorBrush(typeColor);
+                        rect.StrokeThickness = 2;
+                    }
+                };
+
+                Canvas.SetLeft(rect, rx);
+                Canvas.SetTop(rect, ry);
+                DefectCanvas.Children.Add(rect);
+            }
+        }
+
+        // 当前高亮的缺陷 ID
+        private string _highlightedDefectId = null;
+
+        private void DefectRect_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is Rectangle rect && rect.Tag is DefectRegion defect)
+            {
+                HighlightDefectRect(defect.DefectId);
+                OpenDefectDetail(defect);
+            }
+        }
+
+        private void DefectListItem_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is Border border && border.Tag is DefectRegion defect)
+            {
+                HighlightDefectRect(defect.DefectId);
+                OpenDefectDetail(defect);
+            }
+        }
+
+        private void HighlightDefectRect(string defectId)
+        {
+            _highlightedDefectId = defectId;
+            // 重绘所有矩形以更新高亮状态
+            if (_images.Count > 0 && _zoomIdx < _images.Count)
+                DrawDefectRects(_images[_zoomIdx]);
+        }
+
+        private void OpenDefectDetail(DefectRegion defect)
+        {
+            var img = _images[_zoomIdx];
+            var reviewCtrl = new DefectReviewControl(img.ImagePath, defect);
+            reviewCtrl.ReviewSubmitted += OnDefectReviewSubmitted;
+            reviewCtrl.BackRequested += () =>
+            {
+                DefectDetailContainer.Content = null;
+                BorderDefectPanel.Visibility = Visibility.Collapsed;
+                _highlightedDefectId = null;
+                if (_images.Count > 0 && _zoomIdx < _images.Count)
+                    DrawDefectRects(_images[_zoomIdx]);
             };
-            Canvas.SetLeft(rect, bx);
-            Canvas.SetTop(rect, by);
-            BboxCanvas.Children.Add(rect);
+            DefectDetailContainer.Content = reviewCtrl;
+            BorderDefectPanel.Visibility = Visibility.Visible;
+        }
+
+        private void OnDefectReviewSubmitted(ReviewResult result)
+        {
+            DefectDetailContainer.Content = null;
+            BorderDefectPanel.Visibility = Visibility.Collapsed;
+            _highlightedDefectId = null;
+
+            var args = new SaveReviewArgs
+            {
+                ImageId = _images[_zoomIdx].ImageId,
+                DefectId = result.DefectId,
+                Result = result.Result,
+                User = result.User,
+                Comment = result.Comment
+            };
+            SaveReviewRequested?.Invoke(this, args);
         }
 
         private void BuildThumbs()
@@ -930,7 +1100,7 @@ namespace ZenergyBFSI.View.StateCards
                     Cursor = Cursors.Hand,
                     ToolTip = img.AngleName
                 };
-                thumb.MouseDown += (_, __) => { _zoomIdx = idx; PopulateZoom(); };
+                thumb.MouseDown += (_, __) => { _zoomIdx = idx; _highlightedDefectId = null; LoadDefectMap(); };
 
                 if (File.Exists(img.ImagePath))
                 {
@@ -1038,77 +1208,6 @@ namespace ZenergyBFSI.View.StateCards
             _minimapDragging = false;
         }
 
-        private void PopulateHistoryPanel(ImageRecord img)
-        {
-            if (img.IsManualReviewed)
-            {
-                ExpHistory.Visibility = Visibility.Visible;
-                TxtHistResult.Text = img.ManualResult;
-                TxtHistUser.Text = img.ManualUser;
-                TxtHistTime.Text = img.ManualTime;
-
-                bool histOk = img.ManualResult == "OK";
-                TxtHistResult.Foreground = histOk
-                    ? new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50))
-                    : new SolidColorBrush(Color.FromRgb(0xF4, 0x43, 0x36));
-                BorderHistResult.Background = histOk
-                    ? new SolidColorBrush(Color.FromArgb(0x20, 0x4C, 0xAF, 0x50))
-                    : new SolidColorBrush(Color.FromArgb(0x20, 0xF4, 0x43, 0x36));
-
-                if (!string.IsNullOrEmpty(img.ManualComment))
-                {
-                    TxtHistComment.Text = img.ManualComment;
-                    BorderHistComment.Visibility = Visibility.Visible;
-                }
-                else
-                {
-                    BorderHistComment.Visibility = Visibility.Collapsed;
-                }
-            }
-            else
-            {
-                ExpHistory.Visibility = Visibility.Collapsed;
-            }
-        }
-
-        // ════════════════════════════════════════════════════════
-        //  复检操作
-        // ════════════════════════════════════════════════════════
-        private void TglOk_Checked(object sender, RoutedEventArgs e)
-        {
-            TglNg.IsChecked = false;
-            UpdateSubmitBtn();
-        }
-        private void TglOk_Unchecked(object sender, RoutedEventArgs e) => UpdateSubmitBtn();
-        private void TglNg_Checked(object sender, RoutedEventArgs e)
-        {
-            TglOk.IsChecked = false;
-            UpdateSubmitBtn();
-        }
-        private void TglNg_Unchecked(object sender, RoutedEventArgs e) => UpdateSubmitBtn();
-        private void ReviewInput_Changed(object sender, TextChangedEventArgs e) => UpdateSubmitBtn();
-
-        private void UpdateSubmitBtn()
-        {
-            bool judged = TglOk.IsChecked == true || TglNg.IsChecked == true;
-            bool hasUser = !string.IsNullOrWhiteSpace(TxtUser.Text);
-            BtnSubmit.IsEnabled = judged && hasUser;
-        }
-
-        private void BtnSubmit_Click(object sender, RoutedEventArgs e)
-        {
-            if (_images.Count == 0 || _zoomIdx >= _images.Count) return;
-            var img = _images[_zoomIdx];
-
-            var args = new SaveReviewArgs
-            {
-                ImageId = img.ImageId,
-                Result = TglOk.IsChecked == true ? "OK" : "NG",
-                User = TxtUser.Text.Trim(),
-                Comment = TxtComment.Text.Trim()
-            };
-            SaveReviewRequested?.Invoke(this, args);
-        }
 
         // ════════════════════════════════════════════════════════
         //  遮罩 & 图片导航事件
@@ -1119,11 +1218,11 @@ namespace ZenergyBFSI.View.StateCards
 
         private void BtnPrevImg_Click(object sender, RoutedEventArgs e)
         {
-            if (_zoomIdx > 0) { _zoomIdx--; PopulateZoom(); }
+            if (_zoomIdx > 0) { _zoomIdx--; _highlightedDefectId = null; LoadDefectMap(); }
         }
         private void BtnNextImg_Click(object sender, RoutedEventArgs e)
         {
-            if (_zoomIdx < _images.Count - 1) { _zoomIdx++; PopulateZoom(); }
+            if (_zoomIdx < _images.Count - 1) { _zoomIdx++; _highlightedDefectId = null; LoadDefectMap(); }
         }
 
         // 点击图片切换 2× 放大
@@ -1203,6 +1302,32 @@ namespace ZenergyBFSI.View.StateCards
             catch { return new BitmapImage(); }
         }
     }
+    public class DefectTypeToColorConverter : IValueConverter
+    {
+        private static readonly Dictionary<string, Color> _colorMap = new Dictionary<string, Color>
+        {
+            { "划痕", Color.FromRgb(0xEF, 0x44, 0x44) },
+            { "凹坑", Color.FromRgb(0xF9, 0x73, 0x16) },
+            { "异物", Color.FromRgb(0xEA, 0xB3, 0x08) },
+            { "气泡", Color.FromRgb(0x3B, 0x82, 0xF6) },
+        };
+        private static readonly Color _defaultColor = Color.FromRgb(0x8B, 0x5C, 0xF6);
+
+        public static Color GetColor(string defectType)
+        {
+            return _colorMap.TryGetValue(defectType ?? "", out var c) ? c : _defaultColor;
+        }
+
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            var color = GetColor(value as string ?? "");
+            return new SolidColorBrush(color);
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotImplementedException();
+    }
+
     public class EmptyStringToCollapsedConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)

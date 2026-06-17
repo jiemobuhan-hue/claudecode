@@ -37,11 +37,14 @@ namespace ZenergyBFSI.Model
         public static int MOM联机计数 { get; internal set; } = 20;//ms
         public static uint Power { get; internal set; } = 1;//位控制
         public static int 自启动 { get; internal set; } = 0;
-        public static bool SimulationMode { get; internal set; } = false;
-        public static int SimulationInterval { get; internal set; } = 60000;
         public static string Software { get; internal set; } = "ZenergyBFSI";
         public static string EquipmentCode { get; internal set; } = "Test1";
         public static string PLC_IP { get; internal set; } = "127.0.0.1";
+        public static string SQLite路径 { get; internal set; } = "";
+        public static string SQLServer视觉地址 { get; internal set; } = "DESKTOP-0F9L4KO\\RJ";
+        public static string SQLServer视觉库名 { get; internal set; } = "VisionProgram";
+        public static string SQLServer视觉用户 { get; internal set; } = "merj";
+        public static string SQLServer视觉密码 { get; internal set; } = "1234@abcD";
         private static Settings _instance = null;
         private static readonly object _syncRoot = new object();
         private static bool[] _power = null;

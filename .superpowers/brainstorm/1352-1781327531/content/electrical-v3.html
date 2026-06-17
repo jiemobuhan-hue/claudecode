@@ -1,0 +1,160 @@
+<h2>/plc-dev 完整开发流水线</h2>
+<p class="subtitle">从电气需求文档到可运行的上位机代码，五步流水线</p>
+
+<div class="mockup">
+  <div class="mockup-header">开发流水线</div>
+  <div class="mockup-body">
+    <div style="display:flex; align-items:center; gap:12px; padding:16px; flex-wrap:wrap; justify-content:center;">
+
+      <div style="background:#1e293b; border:2px solid #ef4444; border-radius:12px; padding:16px; width:150px; text-align:center;">
+        <div style="color:#ef4444; font-size:24px; margin-bottom:6px;">①</div>
+        <div style="color:white; font-weight:bold; font-size:13px;">需求描述</div>
+        <div style="color:#94a3b8; font-size:10px; margin-top:4px;">自然语言描述工位动作、信号交互、异常处理</div>
+      </div>
+
+      <div style="color:#64748b; font-size:20px;">→</div>
+
+      <div style="background:#1e293b; border:2px solid #f97316; border-radius:12px; padding:16px; width:150px; text-align:center;">
+        <div style="color:#f97316; font-size:24px; margin-bottom:6px;">②</div>
+        <div style="color:white; font-weight:bold; font-size:13px;">flowchart</div>
+        <div style="color:#94a3b8; font-size:10px; margin-top:4px;">生成时序流程图 · PLC↔PC 握手序列 · 状态迁移图</div>
+      </div>
+
+      <div style="color:#64748b; font-size:20px;">→</div>
+
+      <div style="background:#1e293b; border:2px solid #eab308; border-radius:12px; padding:16px; width:150px; text-align:center;">
+        <div style="color:#eab308; font-size:24px; margin-bottom:6px;">③</div>
+        <div style="color:white; font-weight:bold; font-size:13px;">define-signals</div>
+        <div style="color:#94a3b8; font-size:10px; margin-top:4px;">从流程图提取信号 · 分配地址 · 生成 CSV</div>
+      </div>
+
+      <div style="color:#64748b; font-size:20px;">→</div>
+
+      <div style="background:#1e293b; border:2px solid #22c55e; border-radius:12px; padding:16px; width:150px; text-align:center;">
+        <div style="color:#22c55e; font-size:24px; margin-bottom:6px;">④</div>
+        <div style="color:white; font-weight:bold; font-size:13px;">gen-code</div>
+        <div style="color:#94a3b8; font-size:10px; margin-top:4px;">生成 StationHandler · PLC 配置 · 心跳逻辑</div>
+      </div>
+
+      <div style="color:#64748b; font-size:20px;">→</div>
+
+      <div style="background:#1e293b; border:2px solid #3b82f6; border-radius:12px; padding:16px; width:150px; text-align:center;">
+        <div style="color:#3b82f6; font-size:24px; margin-bottom:6px;">⑤</div>
+        <div style="color:white; font-weight:bold; font-size:13px;">validate</div>
+        <div style="color:#94a3b8; font-size:10px; margin-top:4px;">信号完整性校验 · 地址冲突检测 · 代码一致性检查</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>命令详解</h3>
+
+  <div style="display:flex; flex-direction:column; gap:10px;">
+
+    <div style="background:#1e293b; border-left:3px solid #ef4444; border-radius:6px; padding:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-family:monospace; color:#ef4444; font-weight:bold;">① flowchart &lt;需求描述&gt;</span>
+        <span style="color:#64748b; font-size:10px;">新项目 / 新工位</span>
+      </div>
+      <p style="color:#e2e8f0; margin:6px 0 0 0; font-size:12px;">
+        输入自然语言需求 → 输出 Mermaid 时序图 + 状态迁移图。覆盖：正常流程、异常分支、超时处理、重试逻辑。用户确认流程图后进入下一步。
+      </p>
+      <div style="background:#0f172a; border-radius:4px; padding:8px; margin-top:8px; font-family:monospace; font-size:10px; color:#94a3b8;">
+        /plc-dev flowchart "通道1来料：PLC触发→PC扫码→MOM查单→回写结果。异常：扫码超时3秒重试，MOM不可用走离线队列"
+      </div>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #f97316; border-radius:6px; padding:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-family:monospace; color:#f97316; font-weight:bold;">② define-signals</span>
+        <span style="color:#64748b; font-size:10px;">新项目 / 新工位</span>
+      </div>
+      <p style="color:#e2e8f0; margin:6px 0 0 0; font-size:12px;">
+        读取已确认的流程图，自动提取需要哪些 PLC 信号（触发、数据、结果、心跳），按命名规范生成信号名，建议地址分配，输出 CSV 行。支持手动调整后确认写入。
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #eab308; border-radius:6px; padding:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-family:monospace; color:#eab308; font-weight:bold;">③ gen-code</span>
+        <span style="color:#64748b; font-size:10px;">新项目 / 新工位</span>
+      </div>
+      <p style="color:#e2e8f0; margin:6px 0 0 0; font-size:12px;">
+        基于流程图 + 信号表，生成 IStationHandler 实现代码（CheckHeartbeatAsync → WaitForSignalAsync → ExecuteActionAsync），包括超时、重试、异常分支。已存在的 PLC 连接层直接复用。
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #22c55e; border-radius:6px; padding:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-family:monospace; color:#22c55e; font-weight:bold;">④ validate</span>
+        <span style="color:#64748b; font-size:10px;">现有项目</span>
+      </div>
+      <p style="color:#e2e8f0; margin:6px 0 0 0; font-size:12px;">
+        校验：CSV 中每个信号是否都有代码引用 · 代码中引用的信号是否都在 CSV 中 · 地址是否冲突 · 读写方向是否一致 · 心跳信号是否存在。
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #3b82f6; border-radius:6px; padding:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-family:monospace; color:#3b82f6; font-weight:bold;">⑤ diag</span>
+        <span style="color:#64748b; font-size:10px;">现有项目</span>
+      </div>
+      <p style="color:#e2e8f0; margin:6px 0 0 0; font-size:12px;">
+        分层诊断：物理连接 → PLC 心跳 → 单个信号读写 → 工位状态机运行。每层给出检查项和修复建议。
+      </p>
+    </div>
+
+    <div style="background:#1e293b; border-left:3px solid #8b5cf6; border-radius:6px; padding:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-family:monospace; color:#8b5cf6; font-weight:bold;">scaffold</span>
+        <span style="color:#64748b; font-size:10px;">全新项目</span>
+      </div>
+      <p style="color:#e2e8f0; margin:6px 0 0 0; font-size:12px;">
+        一键生成 PLC 通信层项目骨架：PlcMonitor + PlcChannel + ConnectionFactory + SignalReader + 配置模板 + 心跳循环。选品牌即生成对应 Connection 实现。
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>ELECTRICAL.md 章节（泛用）</h3>
+  <table style="width:100%; border-collapse:collapse; color:#e2e8f0; font-size:12px;">
+    <tr style="border-bottom:1px solid #334155;">
+      <th style="text-align:left; padding:6px; width:30px;">#</th>
+      <th style="text-align:left; padding:6px;">章节</th>
+      <th style="text-align:left; padding:6px;">内容</th>
+    </tr>
+    <tr><td style="padding:6px;">1</td><td style="padding:6px;">架构模式</td><td style="padding:6px;">Monitor→Channel→Connection 三层抽象 · 连接工厂 · 信号读写接口 · Rx推送 · 配置驱动</td></tr>
+    <tr><td style="padding:6px;">2</td><td style="padding:6px;">信号定义规范</td><td style="padding:6px;">CSV字段 · 命名规范 · 数据类型映射 · 地址格式 · 读写约定</td></tr>
+    <tr><td style="padding:6px;">3</td><td style="padding:6px;">时序流程图规范</td><td style="padding:6px;">Mermaid 模板 · PLC↔PC 握手模式 · 异常分支标注 · 超时重试表达</td></tr>
+    <tr><td style="padding:6px;">4</td><td style="padding:6px;">工位状态机</td><td style="padding:6px;">IStationHandler 接口 · 三步循环 · CTC · 全局心跳 · 多通道扩展</td></tr>
+    <tr><td style="padding:6px;">5</td><td style="padding:6px;">品牌适配</td><td style="padding:6px;">Omron/Siemens/Modbus/Mitsubishi 参数模板 · 地址差异 · 限制</td></tr>
+    <tr><td style="padding:6px;">6</td><td style="padding:6px;">模拟与测试</td><td style="padding:6px;">SimulationMode · 模拟生成器 · 无硬件调试 · 测试策略</td></tr>
+    <tr><td style="padding:6px;">7</td><td style="padding:6px;">故障排查</td><td style="padding:6px;">分层诊断流程 · 常见问题 · 日志分析</td></tr>
+    <tr style="background:#1e293b;"><td style="padding:6px;">A</td><td style="padding:6px;">附录：本项目参考实现</td><td style="padding:6px;">50信号表 · 2 PLC配置 · 8工位实例 · 时序流程实例</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>文件产物</h3>
+  <table style="width:100%; border-collapse:collapse; color:#e2e8f0; font-size:12px;">
+    <tr style="border-bottom:1px solid #334155;">
+      <th style="text-align:left; padding:6px;">文件</th>
+      <th style="text-align:left; padding:6px;">类型</th>
+      <th style="text-align:left; padding:6px;">作用</th>
+    </tr>
+    <tr>
+      <td style="padding:6px; font-family:monospace;">ELECTRICAL.md</td>
+      <td style="padding:6px;">知识库</td>
+      <td style="padding:6px;">泛用架构模式 + 规范 + 参考实现附录。放在项目根目录，Claude Code 自动加载。</td>
+    </tr>
+    <tr>
+      <td style="padding:6px; font-family:monospace;">.claude/skills/plc-dev/SKILL.md</td>
+      <td style="padding:6px;">Claude Code 技能</td>
+      <td style="padding:6px;">/plc-dev 命令入口，定义 6 个子命令的行为规范。</td>
+    </tr>
+  </table>
+</div>

@@ -1,0 +1,43 @@
+<h2>设计决策：GridOverlay 重构策略</h2>
+<p class="subtitle">当前 1244 行的 UC_InspectionView.xaml.cs 需要拆分，否则三层逻辑全部堆在一个文件里会失控</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>最小改动：在现有 OpenZoom 里叠功能</h3>
+      <p>保持 GridOverlay 的现有结构，只在右侧面板里插入 DefectDetailContainer（第三层），在 Image 上方叠加 DefectCanvas。文件数不变，但 .cs 会膨胀到 ~2000 行。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>改动量最小</li><li>不增加新文件</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>代码文件继续膨胀</li><li>三层逻辑耦合在一个类里</li><li>难以单独测试</li></ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>提取子控件（推荐）</h3>
+      <p>GridOverlay 内部拆分为两个 UserControl：第二层 DefectMapView（大图+Canvas+列表），第三层 DefectReviewControl（裁剪+表单）。UC_InspectionView 只做编排。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>每个控件职责单一</li><li>第三层可独立开发和替换</li><li>UC_InspectionView 瘦身</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>新增 2-3 个文件</li><li>需要在控件间传递事件</li></ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>全 MVVM：引入 ViewModel 层</h3>
+      <p>每层对应一个 ViewModel，用数据绑定驱动 UI，事件通过 Messenger 解耦。最符合 CommunityToolkit.Mvvm 的用法。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>架构最清晰</li><li>充分利用已有的 Mvvm 包</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>改动量最大，周期长</li><li>项目中此区域没有 MVVM 先例</li><li>与现有事件模式不一致</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>推荐 B：提取子控件</h3>
+  <p>理由：用户需求文档已明确指定 <code>DefectReviewControl.xaml</code> 作为第三层控件。提取第二层为 <code>DefectMapView</code> 也是自然延伸。保持现有代码风格（事件驱动、代码后置），不引入新模式。</p>
+</div>

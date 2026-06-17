@@ -1,0 +1,50 @@
+<h2>第一层：卡片网格改造</h2>
+<p class="subtitle">在现有缩略图卡片上叠加缺陷统计标签</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">当前卡片</div>
+    <div class="mockup-body">
+      <div style="background:#1e293b; border-radius:8px; padding:12px; width:180px;">
+        <div class="placeholder" style="height:100px;">缩略图</div>
+        <div style="color:white; font-size:12px; margin-top:8px;">角度: 大面A</div>
+        <div style="color:#94a3b8; font-size:11px;">工位1 | OK</div>
+      </div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">改造后卡片</div>
+    <div class="mockup-body">
+      <div style="background:#1e293b; border:2px solid #38bdf8; border-radius:8px; padding:12px; width:180px;">
+        <div class="placeholder" style="height:100px;">缩略图</div>
+        <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:6px;">
+          <span style="background:#ef4444; color:white; padding:1px 6px; border-radius:3px; font-size:10px;">划痕 ×2</span>
+          <span style="background:#f97316; color:white; padding:1px 6px; border-radius:3px; font-size:10px;">凹坑 ×1</span>
+          <span style="background:#22c55e; color:white; padding:1px 6px; border-radius:3px; font-size:10px;">已复判 ✓</span>
+        </div>
+        <div style="color:white; font-size:12px; margin-top:4px;">角度: 大面A</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>改动点</h3>
+  <table style="width:100%; border-collapse:collapse; color:#e2e8f0; font-size:13px;">
+    <tr style="border-bottom:1px solid #334155;">
+      <th style="text-align:left; padding:8px;">方法</th><th style="text-align:left; padding:8px;">改动</th>
+    </tr>
+    <tr style="border-bottom:1px solid #1e293b;">
+      <td style="padding:8px;">BuildPlaceholderCard</td><td style="padding:8px;">在卡片底部增加缺陷统计 WrapPanel，从 <code>img.Defects</code> 按类型 GroupBy 生成彩色标签</td>
+    </tr>
+    <tr style="border-bottom:1px solid #1e293b;">
+      <td style="padding:8px;">ReplacePlaceholderImage</td><td style="padding:8px;">不变（仅替换图片部分）</td>
+    </tr>
+    <tr style="border-bottom:1px solid #1e293b;">
+      <td style="padding:8px;">卡片点击事件</td><td style="padding:8px;">从 <code>OpenZoom(index)</code> 改为 <code>OpenDefectMap(index)</code></td>
+    </tr>
+    <tr style="border-bottom:1px solid #1e293b;">
+      <td style="padding:8px;">RefreshCardFooter</td><td style="padding:8px;">从空方法改为真实更新：显示复判状态图标 + 缺陷数量摘要</td>
+    </tr>
+  </table>
+</div>

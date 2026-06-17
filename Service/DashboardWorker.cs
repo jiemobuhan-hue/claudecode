@@ -13,15 +13,81 @@ namespace ZenergyBFSI.Service
     {
         private readonly DispatcherTimer _timer;
         private readonly TimeSpan _interval = TimeSpan.FromSeconds(5);
-        private readonly TimeSpan _timeWindow = TimeSpan.FromHours(12);
 
         private int _pageIndex = 0;
-        public static int PageSize => 500;  // 统计粒度，统一供外部访问
+        public static int PageSize => 500;
         private long _sequenceNumber = 0;
         private bool _disposed = false;
 
         private bool _isRunning = false;
         private readonly object _runLock = new object();
+
+        #region [TASK-REFACTOR-004] 班次固定窗口 | 2026-05-15 | AI生成
+        // ─────────────────────────────────────────────────────────────────
+        // 替换原滑动窗口 (now - 12h → now)，改为按班次固定窗口：
+        //   全天 "all"  → 选定日期 00:00:00 ~ 次日 00:00:00 (24h)
+        //   A班  "A"    → 选定日期 08:00:00 ~ 20:00:00 (白班 12h)
+        //   B班  "B"    → 前一天 20:00:00 ~ 选定日期 08:00:00 (晚班 12h)
+        //                 B班跨天，属于"昨晚到今天早上"，数据已完整可查。
+        //   C班  "C"    → 预留，同 A班时间
+        // 窗口固定后，5秒定时器仅刷新同一窗口内数据，不随时间推移滑动。
+        // ─────────────────────────────────────────────────────────────────
+        private string _shift = "all";
+        private DateTime _selectedDate = DateTime.Today;
+        private DateTime _windowStart;
+        private DateTime _windowEnd;
+
+        /// <summary>当前班次标签</summary>
+        public string CurrentShift => _shift;
+
+        /// <summary>当前选定日期</summary>
+        public DateTime SelectedDate => _selectedDate;
+
+        /// <summary>
+        /// 设置看板筛选条件（班次 + 日期），自动触发重新查询。
+        /// 由 DashboardService 转发，最终从 UC_StatesCards 事件驱动。
+        /// </summary>
+        public void SetFilter(string shift, DateTime? date = null)
+        {
+            _shift = shift ?? "all";
+            if (date.HasValue)
+                _selectedDate = date.Value;
+
+            var day = _selectedDate.Date;
+            switch (_shift)
+            {
+                case "A":
+                    _windowStart = day.AddHours(8);             // 当天 08:00
+                    _windowEnd   = day.AddHours(20);            // 当天 20:00
+                    break;
+                case "B":
+                    _windowStart = day.AddDays(-1).AddHours(20); // 昨天 20:00
+                    _windowEnd   = day.AddHours(8);              // 当天 08:00
+                    break;
+                case "C":
+                    _windowStart = day.AddHours(8);             // 预留，暂同 A
+                    _windowEnd   = day.AddHours(20);
+                    break;
+                default: // "all"
+                    _windowStart = day;                         // 当天 00:00
+                    _windowEnd   = day.AddDays(1);              // 次日 00:00
+                    break;
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[DashboardWorker] SetFilter shift={_shift} date={_selectedDate:yyyy-MM-dd} " +
+                $"window=[{_windowStart:yyyy-MM-dd HH:mm} ~ {_windowEnd:yyyy-MM-dd HH:mm}]");
+
+            _pageIndex = 0;  // 切换条件时回到首页
+            ExecuteQueryAsync();
+        }
+        #endregion
+
+        #region [TASK-REFACTOR-001] 出站判定条件 | 2026-05-15 | AI生成
+        // 统一维护，消除 QueryAndParse / ParseRecords / KPI查询 中的重复定义
+        private const string OutboundCondition =
+            "(是否复投='是' OR 视觉检测参数一!='' OR 视觉检测参数二!='' OR 视觉检测参数三!='' OR 视觉检测参数四!='' OR 视觉检测参数五!='' OR 视觉检测参数六!='')";
+        #endregion
 
         public event EventHandler<DashboardSnapshot> SnapshotReady;
 
@@ -29,6 +95,8 @@ namespace ZenergyBFSI.Service
         {
             _timer = new DispatcherTimer { Interval = _interval };
             _timer.Tick += OnTimerTick;
+            // 初始化默认窗口（今天全天）
+            SetFilter("all", DateTime.Today);
         }
 
         public void Start()
@@ -74,54 +142,147 @@ namespace ZenergyBFSI.Service
             finally { lock (_runLock) { _isRunning = false; } }
         }
 
+        #region [TASK-REFACTOR-004] QueryAndParse — 基于班次固定窗口 | 2026-05-15 | AI生成
+        // ─────────────────────────────────────────────────────────────────
+        // 窗口为 _windowStart ~ _windowEnd，由 SetFilter() 根据班次+日期计算。
+        // 查询条件改为 BETWEEN 双边界，替换原滑动 >= windowStart。
+        // ─────────────────────────────────────────────────────────────────
         private DashboardSnapshot QueryAndParse()
         {
-            var now = DateTime.Now;
-            var windowStart = now - _timeWindow;  // 当前时间往前12小时
-            var windowStartStr = windowStart.ToString("yyyy/MM/dd HH:mm:ss");
+            var startStr = _windowStart.ToString("yyyy/MM/dd HH:mm:ss");
+            var endStr = _windowEnd.ToString("yyyy/MM/dd HH:mm:ss");
 
-            // 查询窗口内记录，按时间倒序，取pageSize条
-            int offset = _pageIndex * PageSize;
-            var records = SQLiteGenericHelper.QueryRaw<CellData>(
-                $@"SELECT * FROM CellData WHERE 进站时间 >= @p0 ORDER BY 进站时间 DESC LIMIT {PageSize} OFFSET {offset}",
-                windowStartStr);
-
-            System.Diagnostics.Debug.WriteLine($"[DashboardWorker] 查询到 {records.Count} 条记录，窗口起点={windowStartStr}");
-
-            if (records.Count > 0)
-            {
-                var first = records[0];
-                System.Diagnostics.Debug.WriteLine(
-                    $"[DashboardWorker] 第一条记录: 电芯码={first.电芯码}, 进站时间={first.进站时间}, " +
-                    $"出站结果={first.出站结果}, 视觉检测参数一={first.视觉检测参数一}");
-            }
-
-            // 窗口内总记录数
+            // ① 窗口总记录数（含进站+出站），用于分页
             var totalCountObj = SQLiteGenericHelper.ExecuteScalar<object>(
-                "SELECT COUNT(*) FROM CellData WHERE 进站时间 >= @p0", windowStartStr);
+                "SELECT COUNT(*) FROM CellData WHERE 进站时间 >= @p0 AND 进站时间 < @p1",
+                startStr, endStr);
             int totalCount = Convert.ToInt32(totalCountObj);
 
-            // 解析统计
-            var (kpi, hourly, ngTypes, recent) = ParseRecords(records, windowStart);
+            // ② KPI 聚合 — 全窗口，仅出站记录
+            var (totalOutbound, ok, ng) = QueryKpi(startStr, endStr);
+
+            // ③ 时段分布 — 全窗口，出站记录按小时聚合 OK/NG
+            var hourly = QueryHourly(startStr, endStr);
+
+            // ④ 最近记录（分页）+ NG类型 — 来自当前页
+            int offset = _pageIndex * PageSize;
+            var records = SQLiteGenericHelper.QueryRaw<CellData>(
+                $@"SELECT * FROM CellData WHERE 进站时间 >= @p0 AND 进站时间 < @p1 ORDER BY 进站时间 DESC LIMIT {PageSize} OFFSET {offset}",
+                startStr, endStr);
+
+            var (ngTypes, recent) = ParsePageRecords(records);
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[DashboardWorker] shift={_shift} date={_selectedDate:yyyy-MM-dd} " +
+                $"窗口总量={totalCount} 出站={totalOutbound} OK={ok} NG={ng} " +
+                $"良率={(totalOutbound > 0 ? ok * 100.0 / totalOutbound : 0):F1}% " +
+                $"当前页={records.Count}条");
 
             Interlocked.Increment(ref _sequenceNumber);
             return new DashboardSnapshot(
-                kpi.Total, kpi.Ok, kpi.Ng,
+                totalCount, ok, ng,
                 hourly, ngTypes, recent,
                 totalCount, _pageIndex, PageSize,
                 _sequenceNumber);
         }
+        #endregion
 
-        /// <summary>
-        /// 从指定记录集合中解析KPI、时段分布、NG类型、最近记录。
-        /// 统计基于当前页（pageSize=500条），覆盖约5小时数据密度。
-        /// </summary>
-        private (KpiResult kpi, List<HourlyData> hourly, List<NgTypeData> ngTypes, List<RecentRecord> recent)
-            ParseRecords(List<CellData> records, DateTime windowStart)
+        #region [TASK-REFACTOR-004] QueryKpi — 班次窗口 KPI 聚合 | 2026-05-15 | AI生成
+        private (int totalOutbound, int ok, int ng) QueryKpi(string startStr, string endStr)
         {
-            // ── 出站判定：视觉检测参数任一有值 OR 是否复投=true ──
-            Func<CellData, bool> isOutbound = c =>
-                c.是否复投
+            var okObj = SQLiteGenericHelper.ExecuteScalar<object>(
+                $"SELECT COUNT(*) FROM CellData WHERE 进站时间 >= @p0 AND 进站时间 < @p1 AND {OutboundCondition} AND 出站结果 != 'NG'",
+                startStr, endStr);
+            var ngObj = SQLiteGenericHelper.ExecuteScalar<object>(
+                $"SELECT COUNT(*) FROM CellData WHERE 进站时间 >= @p0 AND 进站时间 < @p1 AND {OutboundCondition} AND 出站结果 = 'NG'",
+                startStr, endStr);
+            int ok = Convert.ToInt32(okObj);
+            int ng = Convert.ToInt32(ngObj);
+            return (ok + ng, ok, ng);
+        }
+        #endregion
+
+        #region [TASK-REFACTOR-005] QueryHourly — 三分类时段分布 | 2026-05-15 | AI生成
+        // ─────────────────────────────────────────────────────────────────
+        // 分三类统计每个小时桶：
+        //   检测中 (Pending)：进站记录，未触发 OutboundCondition
+        //   OK：出站记录，出站结果 != "NG"
+        //   NG：出站记录，出站结果 == "NG"
+        //
+        // 分两次查询：进站（无出站结果列）和出站（有出站结果），分别聚合。
+        // ─────────────────────────────────────────────────────────────────
+        private List<HourlyData> QueryHourly(string startStr, string endStr)
+        {
+            int totalHours = (int)(_windowEnd - _windowStart).TotalHours;
+            if (totalHours <= 0) totalHours = 24;
+
+            var hourlyDict = new Dictionary<int, HourlyData>();
+            for (int i = 0; i < totalHours; i++)
+            {
+                var hour = (_windowStart.Hour + i) % 24;
+                hourlyDict[hour] = new HourlyData { Hour = hour };
+            }
+
+            // ① 进站记录 → 检测中桶（只查时间列）
+            var inboundSources = SQLiteGenericHelper.QueryRaw<InboundSource>(
+                $"SELECT 进站时间 FROM CellData WHERE 进站时间 >= @p0 AND 进站时间 < @p1 AND NOT ({OutboundCondition})",
+                startStr, endStr);
+            foreach (var src in inboundSources)
+            {
+                if (string.IsNullOrEmpty(src.进站时间)) continue;
+                if (!DateTime.TryParse(src.进站时间, out var dt)) continue;
+                if (hourlyDict.TryGetValue(dt.Hour, out var bucket))
+                    bucket.Pending++;
+            }
+
+            // ② 出站记录 → OK/NG桶（已限定 OutboundCondition）
+            var outboundSources = SQLiteGenericHelper.QueryRaw<HourlySource>(
+                $"SELECT 进站时间, 出站结果 FROM CellData WHERE 进站时间 >= @p0 AND 进站时间 < @p1 AND {OutboundCondition}",
+                startStr, endStr);
+            foreach (var src in outboundSources)
+            {
+                if (string.IsNullOrEmpty(src.进站时间)) continue;
+                if (!DateTime.TryParse(src.进站时间, out var dt)) continue;
+                if (!hourlyDict.TryGetValue(dt.Hour, out var bucket)) continue;
+
+                if (src.出站结果 == "NG")
+                    bucket.Ng++;
+                else
+                    bucket.Ok++;
+            }
+
+            return hourlyDict.Keys
+                .OrderBy(h => (h - _windowStart.Hour + 24) % 24)
+                .Select(h => hourlyDict[h])
+                .ToList();
+        }
+
+        /// <summary>进站记录轻量 DTO，仅含时间列。</summary>
+        private class InboundSource
+        {
+            public string 进站时间 { get; set; }
+        }
+
+        /// <summary>出站记录轻量 DTO。</summary>
+        private class HourlySource
+        {
+            public string 进站时间 { get; set; }
+            public string 出站结果 { get; set; }
+        }
+        #endregion
+
+        #region [TASK-REFACTOR-001] ParsePageRecords — 从当前页解析 NG类型 + 最近记录 | 2026-05-15 | AI生成
+        // ─────────────────────────────────────────────────────────────────
+        // KPI 和 Hourly 已由 QueryKpi / QueryHourly 基于全窗口独立查询，
+        // 此方法仅处理 NG类型（从当前页采样）和最近记录列表。
+        // 修复：进站记录 OverallResult 显示为 "检测中" 而非 "OK"。
+        // ─────────────────────────────────────────────────────────────────
+        private (List<NgTypeData> ngTypes, List<RecentRecord> recent)
+            ParsePageRecords(List<CellData> records)
+        {
+            // 出站判定 — 与 OutboundCondition 保持一致
+            bool IsOutbound(CellData c) =>
+                c.是否复投 == "是"
                 || !string.IsNullOrEmpty(c.视觉检测参数一)
                 || !string.IsNullOrEmpty(c.视觉检测参数二)
                 || !string.IsNullOrEmpty(c.视觉检测参数三)
@@ -129,41 +290,9 @@ namespace ZenergyBFSI.Service
                 || !string.IsNullOrEmpty(c.视觉检测参数五)
                 || !string.IsNullOrEmpty(c.视觉检测参数六);
 
-            var outboundRecords = records.Where(isOutbound).ToList();
-            var inboundRecords = records.Where(c => !isOutbound(c)).ToList();
+            var outboundRecords = records.Where(IsOutbound).ToList();
 
-            // ── KPI：Total=所有记录，OK=出站中非NG，NG=出站中NG ──
-            int total = records.Count;
-            int ok = outboundRecords.Count(c => c.出站结果 != "NG");
-            int ng = outboundRecords.Count(c => c.出站结果 == "NG");
-
-            // ── 时段分布：12小时窗口，每小时一个桶 ──
-            var hourlyDict = new Dictionary<int, HourlyData>();
-            for (int i = 0; i < 12; i++)
-            {
-                var hour = (windowStart.Hour + i) % 24;
-                hourlyDict[hour] = new HourlyData { Hour = hour  , Ok = 0, Ng = 0 };
-            }
-
-            foreach (var rec in inboundRecords)
-            {
-                if (DateTime.TryParse(rec.进站时间, out var dt))
-                {
-                    if (hourlyDict.TryGetValue(dt.Hour, out var hd))
-                        hd.Ok++;
-                }
-            }
-            foreach (var rec in outboundRecords)
-            {
-                if (DateTime.TryParse(rec.进站时间, out var dt))
-                {
-                    if (hourlyDict.TryGetValue(dt.Hour, out var hd))
-                        hd.Ng++;
-                }
-            }
-            var hourly = hourlyDict.Values.OrderBy(h => h.Hour).ToList();
-
-            // ── NG类型统计 ──
+            // ── NG类型统计（解析 面X外观缺陷缺陷名×次数 格式，按 面+缺陷 汇总）──
             var ngTypeCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             foreach (var rec in outboundRecords.Where(c => c.出站结果 == "NG" || c.Ng类型数量 > 0))
             {
@@ -172,13 +301,27 @@ namespace ZenergyBFSI.Service
                     rec.Ng类型1, rec.Ng类型2, rec.Ng类型3, rec.Ng类型4,
                     rec.Ng类型5, rec.Ng类型6, rec.Ng类型7, rec.Ng类型8
                 };
-                foreach (var ngType in ngTypeList)
+                foreach (var ngField in ngTypeList)
                 {
-                    if (!string.IsNullOrEmpty(ngType))
+                    if (string.IsNullOrEmpty(ngField)) continue;
+                    // 格式: "面A外观缺陷划伤×2,气泡×2,裂纹×1"
+                    int marker = ngField.IndexOf("外观缺陷");
+                    if (marker < 0) continue;
+                    var areaName = ngField.Substring(0, marker); // "面A"
+                    var defectPart = ngField.Substring(marker + 4); // "划伤×2,气泡×2,裂纹×1"
+                    var defects = defectPart.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var d in defects)
                     {
-                        if (!ngTypeCounts.ContainsKey(ngType))
-                            ngTypeCounts[ngType] = 0;
-                        ngTypeCounts[ngType]++;
+                        var trimmed = d.Trim();
+                        if (trimmed.Length == 0) continue;
+                        var parts = trimmed.Split('×');
+                        string defectName = parts[0].Trim();
+                        int count = 1;
+                        if (parts.Length >= 2 && int.TryParse(parts[1], out int parsed))
+                            count = parsed;
+                        string key = $"{areaName}-{defectName}"; // "面A-划伤"
+                        ngTypeCounts.TryGetValue(key, out int cur);
+                        ngTypeCounts[key] = cur + count;
                     }
                 }
             }
@@ -192,10 +335,12 @@ namespace ZenergyBFSI.Service
             var recent = new List<RecentRecord>();
             foreach (var rec in records)
             {
-                bool outbound = isOutbound(rec);
-                var overallResult = outbound
-                    ? (rec.出站结果 == "NG" ? "NG" : "OK")
-                    : "OK";
+                bool outbound = IsOutbound(rec);
+                string overallResult;
+                if (!outbound)
+                    overallResult = "检测中";
+                else
+                    overallResult = rec.出站结果 == "NG" ? "NG" : "OK";
 
                 string ngTypesStr = "";
                 if (outbound && rec.Ng类型数量 > 0)
@@ -227,10 +372,9 @@ namespace ZenergyBFSI.Service
                 });
             }
 
-            return (new KpiResult { Total = total, Ok = ok, Ng = ng }, hourly, ngTypes, recent);
+            return (ngTypes, recent);
         }
-
-        private struct KpiResult { public int Total; public int Ok; public int Ng; }
+        #endregion
 
         public void Dispose()
         {

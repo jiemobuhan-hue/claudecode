@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build *)",
+      "Bash(dotnet run *)",
+      "Bash(msbuild ZenergyBFSI.sln /p:Configuration=Debug /p:Platform=\"Any CPU\" /t:Build)",
+      "Bash(where MSBuild)",
+      "Bash(where msbuild *)",
+      "Read(//c/Program Files/Microsoft Visual Studio/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/2022//**)",
+      "Bash(\"/c/Program Files \\(x86\\)/Microsoft Visual Studio/2022/BuildTools/MSBuild/Current/Bin/MSBuild.exe\" \"D:/蓝膜外观检测上位机/ZenergyBFSI/ZenergyBFSI0522/ZenergyBFSI.sln\" /p:Configuration=Debug /p:Platform=\"Any CPU\" /t:Build)",
+      "Bash(\"/c/Program Files \\(x86\\)/Microsoft Visual Studio/2022/BuildTools/MSBuild/Current/Bin/MSBuild.exe\" \"D:\\\\蓝膜外观检测上位机\\\\ZenergyBFSI\\\\ZenergyBFSI0522\\\\ZenergyBFSI.csproj\" /p:Configuration=Debug /p:Platform=x64 /t:Build)",
+      "Bash(cmd.exe /c '\"C:\\\\Program Files \\(x86\\)\\\\Microsoft Visual Studio\\\\2022\\\\BuildTools\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" D:\\\\蓝膜外观检测上位机\\\\ZenergyBFSI\\\\ZenergyBFSI0522\\\\ZenergyBFSI.csproj /p:Configuration=Debug /p:Platform=x64 /t:Build 2>&1')"
+    ]
+  }
+}

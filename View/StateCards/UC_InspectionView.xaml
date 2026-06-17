@@ -1,13 +1,16 @@
 ﻿<UserControl x:Class="ZenergyBFSI.View.StateCards.UC_InspectionView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
              Background="{DynamicResource MaterialDesignBackground}"
              xmlns:local="clr-namespace:ZenergyBFSI.View.StateCards"
-             mc:Ignorable="d" 
-             d:DesignHeight="450" d:DesignWidth="800">
+             mc:Ignorable="d"
+             d:DesignHeight="792.209" d:DesignWidth="1244.244">
+    <UserControl.Resources>
+        <local:DefectTypeToColorConverter x:Key="DefectTypeToColorConverter"/>
+    </UserControl.Resources>
     <!-- 三层 Grid：搜索栏 / 主内容 / 放大遮罩（ZIndex=100） -->
     <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
@@ -103,6 +106,14 @@
                         <TextBlock Text="搜索" VerticalAlignment="Center" Margin="4,0,0,0"/>
                     </StackPanel>
                 </Button>
+
+                <!-- #region 2026-05-25 搜索加载动画 -->
+                <ProgressBar Grid.Column="17" x:Name="PbSearch"
+                             IsIndeterminate="True" Visibility="Collapsed"
+                             Style="{StaticResource MaterialDesignCircularProgressBar}"
+                             Width="24" Height="24" Margin="8,0,0,0"
+                             VerticalAlignment="Center"/>
+                <!-- #endregion -->
 
                 <Button Grid.Column="18" x:Name="BtnClear"
                         Style="{StaticResource MaterialDesignOutlinedButton}"
@@ -290,6 +301,13 @@
                                 <TextBlock x:Name="TxtImgCount" Text="0 张图片" Margin="6,0,0,0"
                                            FontSize="12" VerticalAlignment="Center"
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                <!-- #region 2026-05-25 图片加载动画 -->
+                                <ProgressBar x:Name="PbImageLoad"
+                                             IsIndeterminate="True" Visibility="Collapsed"
+                                             Style="{StaticResource MaterialDesignCircularProgressBar}"
+                                             Width="16" Height="16" Margin="8,0,0,0"
+                                             VerticalAlignment="Center"/>
+                                <!-- #endregion -->
                             </StackPanel>
                         </StackPanel>
                         <!-- 判定 Badge -->
@@ -328,7 +346,7 @@
                                ItemWidth="260"/>
                         </ScrollViewer>
                     </StackPanel>
-    
+
                 </md:Card>
             </Grid>
         </Grid>
@@ -365,9 +383,8 @@
                                        Stretch="Uniform" Margin="8"
                                        RenderOptions.BitmapScalingMode="HighQuality"
                                        MouseDown="ImgZoom_MouseDown"/>
-                                <!-- 缺陷标注框（由 code-behind 动态添加 Rectangle）-->
-                                <Canvas x:Name="BboxCanvas"
-                                        IsHitTestVisible="False"/>
+                                <!-- 缺陷标注矩形（可点击，由 DrawDefectRects 动态添加）-->
+                                <Canvas x:Name="DefectCanvas"/>
                             </Grid>
                         </ScrollViewer>
 
@@ -420,240 +437,169 @@
                                             Orientation="Horizontal"  />
                             </ScrollViewer>
                         </Border>
+
+                        <!-- 小地图导航器 (右下角) -->
+                        <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                Width="160" Height="100" Margin="0,0,8,60"
+                                CornerRadius="6" Background="#FF1E1E1E"
+                                BorderBrush="#33FFFFFF" BorderThickness="1">
+                            <Canvas x:Name="CanvasMinimap" ClipToBounds="True"
+                                    MouseDown="Minimap_MouseDown"
+                                    MouseMove="Minimap_MouseMove"
+                                    MouseUp="Minimap_MouseUp"
+                                    Cursor="Hand">
+                                <Image x:Name="ImgMinimap" Stretch="Uniform"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Width="{Binding ActualWidth, ElementName=CanvasMinimap}"
+                                       Height="{Binding ActualHeight, ElementName=CanvasMinimap}"/>
+                                <Rectangle x:Name="RectViewport"
+                                           Fill="#332196F3" Stroke="#992196F3"
+                                           StrokeThickness="1.5" RadiusX="2" RadiusY="2"
+                                           IsHitTestVisible="False"/>
+                            </Canvas>
+                        </Border>
                     </Grid>
 
-                    <!-- ─ 右：信息 + 复检操作 ────────────────── -->
+                    <!-- ─ 右：缺陷列表 + 第三层容器 ────── -->
                     <Border Grid.Column="1"
                             BorderThickness="1,0,0,0"
                             BorderBrush="{DynamicResource MaterialDesignDivider}">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-                                <!-- 弹窗标题 -->
-                                <Border Padding="16,12"
-                                        BorderThickness="0,0,0,1"
-                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
-                                        Background="{DynamicResource MaterialDesignToolBarBackground}">
-                                    <StackPanel  >
-                                        <TextBlock x:Name="TxtZoomTitle" Text="--"
-                                                   Margin="2,0,0,0"
-                                                   FontSize="14" FontWeight="Medium"/>
-                                        <TextBlock x:Name="TxtZoomStation" Text="工位 --"
-                                                   FontSize="11"
-                                                   Margin="2,0,0,0"
-                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"/>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- 小地图导航器 -->
-                                <Border CornerRadius="6" Height="180" Margin="16,8,16,0"
-                                        Background="#FF1E1E1E" BorderBrush="#33FFFFFF" BorderThickness="1">
-                                    <Canvas x:Name="CanvasMinimap" ClipToBounds="True"
-                                            MouseDown="Minimap_MouseDown"
-                                            MouseMove="Minimap_MouseMove"
-                                            MouseUp="Minimap_MouseUp"
-                                            Cursor="Hand">
-                                        <Image x:Name="ImgMinimap" Stretch="Uniform"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                                               Width="{Binding ActualWidth, ElementName=CanvasMinimap}"
-                                               Height="{Binding ActualHeight, ElementName=CanvasMinimap}"/>
-                                        <Rectangle x:Name="RectViewport"
-                                                   Fill="#332196F3" Stroke="#992196F3"
-                                                   StrokeThickness="1.5" RadiusX="2" RadiusY="2"
-                                                   IsHitTestVisible="False"/>
-                                    </Canvas>
-                                </Border>
-
-                                <!-- 视觉系统信息 -->
-                                <Expander Header="视觉系统判断" IsExpanded="True"
-                                          Margin="0,4,0,0">
-                                    <StackPanel Margin="16,6,16,10" >
-                                        <Grid Margin="7,0,0,0">
-                                            <TextBlock Text="视觉判定" FontSize="11"
-                                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                                       VerticalAlignment="Center"/>
-                                            <Border x:Name="BorderVision" HorizontalAlignment="Right"
-                                                    CornerRadius="10" Padding="10,2"
-                                                    Background="#1A4CAF50">
-                                                <TextBlock x:Name="TxtVisionResult" Text="--"
-                                                           FontFamily="Consolas" FontSize="11"
-                                                           FontWeight="Bold" Foreground="#4CAF50"/>
-                                            </Border>
-                                        </Grid>
-                                        <Grid Margin="7,0,0,0">
-                                            <TextBlock Text="置信度" FontSize="11"
-                                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
-                                            <TextBlock x:Name="TxtVisionScore" Text="--"
-                                                       HorizontalAlignment="Right"
-                                                       FontFamily="Consolas" FontSize="11"/>
-                                        </Grid>
-                                        <ProgressBar x:Name="PbScore" Minimum="0" Maximum="1"
-                                                     Value="0" Height="4"/>
-                                        <Grid Margin="7,0,0,0">
-                                            <TextBlock Text="缺陷类型" FontSize="11"
-                                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
-                                            <TextBlock x:Name="TxtNgType" Text="--"
-                                                       HorizontalAlignment="Right"
-                                                       FontFamily="Consolas" FontSize="11"
-                                                       Foreground="#FFC107"/>
-                                        </Grid>
-                                        <Grid Margin="7,0,0,0">
-                                            <TextBlock Text="缺陷坐标" FontSize="11"
-                                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
-                                            <TextBlock x:Name="TxtBbox" Text="--"
-                                                       HorizontalAlignment="Right"
-                                                       FontFamily="Consolas" FontSize="10"
-                                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
-                                        </Grid>
-                                    </StackPanel>
-                                </Expander>
-
-                                <Separator/>
-
-                                <!-- 人工复检 -->
-                                <StackPanel Margin="16,12,16,12"  >
-                                    <TextBlock Text="人工复检判断" FontSize="12" FontWeight="Medium" Margin="10,0,0,0"/>
-
-                                    <!-- OK / NG 大按钮 -->
-                                    <UniformGrid Columns="2" Rows="1"  Margin="10,0,0,0">
-                                        <ToggleButton x:Name="TglOk" Margin="0,0,4,0"
-                                                      Height="68"
-                                                      Checked="TglOk_Checked"
-                                                      Unchecked="TglOk_Unchecked">
-                                            <ToggleButton.Style>
-                                                <Style TargetType="ToggleButton"
-                                                       BasedOn="{StaticResource MaterialDesignOutlinedButton}">
-                                                    <Setter Property="BorderBrush" Value="#4CAF50"/>
-                                                    <Style.Triggers>
-                                                        <Trigger Property="IsChecked" Value="True">
-                                                            <Setter Property="Background" Value="#4CAF50"/>
-                                                        </Trigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </ToggleButton.Style>
-                                            <StackPanel HorizontalAlignment="Center" >
-                                                <md:PackIcon Kind="CheckCircleOutline" Width="26" Height="26" Margin="4,0,0,0"
-                                                             Foreground="#4CAF50"
-                                                             HorizontalAlignment="Center"/>
-                                                <TextBlock Text="OK" FontSize="16" FontWeight="Bold"
-                                                           Foreground="#4CAF50"
-                                                           HorizontalAlignment="Center"/>
-                                                <TextBlock Text="合格放行" FontSize="10"
-                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                                           HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                        </ToggleButton>
-
-                                        <ToggleButton x:Name="TglNg" Margin="4,0,0,0"
-                                                      Height="68"
-                                                      Checked="TglNg_Checked"
-                                                      Unchecked="TglNg_Unchecked">
-                                            <ToggleButton.Style>
-                                                <Style TargetType="ToggleButton"
-                                                       BasedOn="{StaticResource MaterialDesignOutlinedButton}">
-                                                    <Setter Property="BorderBrush" Value="#F44336"/>
-                                                    <Style.Triggers>
-                                                        <Trigger Property="IsChecked" Value="True">
-                                                            <Setter Property="Background" Value="#F44336"/>
-                                                        </Trigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </ToggleButton.Style>
-                                            <StackPanel HorizontalAlignment="Center" >
-                                                <md:PackIcon Kind="CloseCircleOutline" Width="26" Height="26" Margin="4,0,0,0"
-                                                             Foreground="#F44336"
-                                                             HorizontalAlignment="Center"/>
-                                                <TextBlock Text="NG" FontSize="16" FontWeight="Bold"
-                                                           Foreground="#F44336"
-                                                           HorizontalAlignment="Center"/>
-                                                <TextBlock Text="判定不合格" FontSize="10"
-                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                                           HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                        </ToggleButton>
-                                    </UniformGrid>
-
-                                    <!-- 操作员 -->
-                                    <TextBox x:Name="TxtUser"  Margin="10,0,0,0"
-                                             md:HintAssist.Hint="操作员姓名（必填）"
-                                             md:TextFieldAssist.HasClearButton="True"
-                                             TextChanged="ReviewInput_Changed"/>
-
-                                    <!-- 备注 -->
-                                    <TextBox x:Name="TxtComment"  Margin="10,0,0,0"
-                                             md:HintAssist.Hint="复检备注（可选）"
-                                             AcceptsReturn="True" TextWrapping="Wrap"
-                                             MinLines="3" MaxLines="5"
-                                             VerticalScrollBarVisibility="Auto"/>
-
-                                    <!-- 提交 -->
-                                    <Button x:Name="BtnSubmit"  Margin="10,0,0,0"
-                                            Style="{StaticResource MaterialDesignRaisedButton}"
-                                            HorizontalAlignment="Stretch"
-                                            Padding="0,10" IsEnabled="False"
-                                            Click="BtnSubmit_Click">
-                                        <StackPanel Orientation="Horizontal"  >
-                                            <md:PackIcon Kind="ContentSave" Width="18" Height="18" Margin="6,0,0,0"
-                                                         VerticalAlignment="Center"/>
-                                            <TextBlock Text="提交复检结果" FontSize="13"  Margin="6,0,0,0"
-                                                       VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                    </Button>
+                            <!-- 弹窗标题 -->
+                            <Border Grid.Row="0" Padding="16,12"
+                                    BorderThickness="0,0,0,1"
+                                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                    Background="{DynamicResource MaterialDesignToolBarBackground}">
+                                <StackPanel>
+                                    <TextBlock x:Name="TxtZoomTitle" Text="--"
+                                               Margin="2,0,0,0"
+                                               FontSize="14" FontWeight="Medium"/>
+                                    <TextBlock x:Name="TxtZoomStation" Text="工位 --"
+                                               FontSize="11" Margin="2,0,0,0"
+                                               Foreground="{DynamicResource MaterialDesignBodyLight}"/>
                                 </StackPanel>
+                            </Border>
 
-                                <Separator/>
+                            <!-- 缺陷列表 (可滚动) -->
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <!-- 整图无缺陷提示 -->
+                                    <TextBlock x:Name="TxtNoDefects" Text="无缺陷记录"
+                                               FontSize="13" Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                               HorizontalAlignment="Center" Margin="0,20,0,0"
+                                               Visibility="Collapsed"/>
 
-                                <!-- 历史复检记录（有记录时显示）-->
-                                <Expander x:Name="ExpHistory" Header="已有复检记录"
-                                          IsExpanded="True" Margin="0,4,0,0"
-                                          Visibility="Collapsed">
-                                    <Border Margin="16,4,16,12" Padding="12"
-                                            BorderThickness="1" CornerRadius="6"
-                                            BorderBrush="{DynamicResource MaterialDesignDivider}">
-                                        <!--<StackPanel Spacing="7">-->
-                                        <StackPanel >
-                                            <Grid>
-                                                <TextBlock Text="复检结果" FontSize="11"
-                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
-                                                <Border x:Name="BorderHistResult"
-                                                        HorizontalAlignment="Right"
-                                                        CornerRadius="10" Padding="10,2"
-                                                        Background="#1A4CAF50">
-                                                    <TextBlock x:Name="TxtHistResult" Text="--"
-                                                               FontFamily="Consolas" FontWeight="Bold"
-                                                               FontSize="11" Foreground="#4CAF50"/>
+                                    <ItemsControl x:Name="IcDefects" Margin="12,8">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,0,6" Padding="10,8"
+                                                        CornerRadius="6" Cursor="Hand"
+                                                        MouseDown="DefectListItem_MouseDown"
+                                                        Tag="{Binding}">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="#0F172A"/>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <StackPanel>
+                                                        <Grid>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Border CornerRadius="3" Padding="5,1"
+                                                                        Background="{Binding DefectType, Converter={StaticResource DefectTypeToColorConverter}}">
+                                                                    <TextBlock Text="{Binding DefectType}" FontSize="11"
+                                                                               Foreground="White" FontWeight="Bold"/>
+                                                                </Border>
+                                                                <TextBlock Text="{Binding DefectId, StringFormat=' # {0}'}"
+                                                                           FontSize="9" Foreground="#64748B"
+                                                                           VerticalAlignment="Center" Margin="6,0,0,0"
+                                                                           TextTrimming="CharacterEllipsis" MaxWidth="80"/>
+                                                            </StackPanel>
+                                                            <TextBlock Text="{Binding Confidence, StringFormat='{}{0:P0}'}"
+                                                                       FontSize="13" FontWeight="Bold"
+                                                                       Foreground="White"
+                                                                       HorizontalAlignment="Right"/>
+                                                        </Grid>
+                                                        <Grid Margin="0,4,0,0">
+                                                            <TextBlock FontSize="10" Foreground="#64748B">
+                                                                <Run Text="坐标: ("/>
+                                                                <Run Text="{Binding X, StringFormat='{}{0:F2}'}"/>
+                                                                <Run Text=", "/>
+                                                                <Run Text="{Binding Y, StringFormat='{}{0:F2}'}"/>
+                                                                <Run Text=")"/>
+                                                            </TextBlock>
+                                                            <Border HorizontalAlignment="Right"
+                                                                    CornerRadius="8" Padding="6,1">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Status}" Value="Unreviewed">
+                                                                                <Setter Property="Background" Value="#1AEAB308"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding Status}" Value="OK">
+                                                                                <Setter Property="Background" Value="#1A4CAF50"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding Status}" Value="NG">
+                                                                                <Setter Property="Background" Value="#1AF44336"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <TextBlock FontSize="10" FontWeight="Bold">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding Status}" Value="Unreviewed">
+                                                                                    <Setter Property="Text" Value="未复判"/>
+                                                                                    <Setter Property="Foreground" Value="#EAB308"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding Status}" Value="OK">
+                                                                                    <Setter Property="Text" Value="✓ OK"/>
+                                                                                    <Setter Property="Foreground" Value="#4CAF50"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding Status}" Value="NG">
+                                                                                    <Setter Property="Text" Value="✗ NG"/>
+                                                                                    <Setter Property="Foreground" Value="#F44336"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                            </Border>
+                                                        </Grid>
+                                                    </StackPanel>
                                                 </Border>
-                                            </Grid>
-                                            <Grid>
-                                                <TextBlock Text="操作员" FontSize="11"
-                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
-                                                <TextBlock x:Name="TxtHistUser" Text="--"
-                                                           HorizontalAlignment="Right" FontSize="11"/>
-                                            </Grid>
-                                            <Grid>
-                                                <TextBlock Text="时间" FontSize="11"
-                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
-                                                <TextBlock x:Name="TxtHistTime" Text="--"
-                                                           HorizontalAlignment="Right"
-                                                           FontFamily="Consolas" FontSize="10"/>
-                                            </Grid>
-                                            <Border x:Name="BorderHistComment"
-                                                    Padding="8,6" CornerRadius="4"
-                                                    Visibility="Collapsed"
-                                                    Background="{DynamicResource MaterialDesignToolBarBackground}">
-                                                <TextBlock x:Name="TxtHistComment" Text=""
-                                                           FontSize="11" TextWrapping="Wrap"
-                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
-                                            </Border>
-                                        </StackPanel>
-                                    </Border>
-                                </Expander>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
 
-                            </StackPanel>
-                        </ScrollViewer>
+                        </Grid>
                     </Border>
                 </Grid>
             </md:Card>
+
+            <!-- 第三层浮动面板（悬浮在弹窗上方，右侧） -->
+            <Border x:Name="BorderDefectPanel"
+                    Visibility="Collapsed"
+                    HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                    Width="420" Margin="0,32,48,32"
+                    Background="#CC1E293B" CornerRadius="12"
+                    BorderBrush="#33FFFFFF" BorderThickness="1"
+                    Panel.ZIndex="10"
+                    MouseDown="DialogCard_MouseDown">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="20"
+                                      ShadowDepth="4" Opacity="0.6"/>
+                </Border.Effect>
+                <ContentControl x:Name="DefectDetailContainer"/>
+            </Border>
         </Grid>
     </Grid>
 </UserControl>

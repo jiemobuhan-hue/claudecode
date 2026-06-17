@@ -1,0 +1,81 @@
+<UserControl x:Class="ZenergyBFSI.View.StateCards.DefectReviewControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
+    <Border Background="#1E293B" CornerRadius="12" Padding="20">
+        <StackPanel>
+            <!-- 缺陷裁剪图：撑满宽度，更高 -->
+            <Border Background="#0F172A" CornerRadius="8" Padding="4"
+                    Height="340">
+                <Image x:Name="ImgDefect" Stretch="Uniform"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+
+            <!-- 缺陷信息 -->
+            <Border Background="#0F172A" CornerRadius="6" Padding="12" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Foreground="White" FontSize="14" FontWeight="Bold">
+                        <Run x:Name="RunDefectType" Text="--"/>
+                        <Run Text="  ·  "/>
+                        <Run x:Name="RunConfidence" Text="--"/>
+                    </TextBlock>
+                    <TextBlock Foreground="#94A3B8" FontSize="11" Margin="0,4,0,0">
+                        <Run x:Name="RunCoordinates" Text="--"/>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <!-- 复判按钮 -->
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                <ToggleButton x:Name="BtnOK" Grid.Column="0"
+                              Style="{StaticResource MaterialDesignRaisedButton}"
+                              Height="56"
+                              Content="OK" FontSize="18" FontWeight="Bold"
+                              Checked="BtnOK_Checked" Unchecked="BtnOK_Unchecked"/>
+                <ToggleButton x:Name="BtnNG" Grid.Column="2"
+                              Style="{StaticResource MaterialDesignRaisedButton}"
+                              Height="56"
+                              Content="NG" FontSize="18" FontWeight="Bold"
+                              Checked="BtnNG_Checked" Unchecked="BtnNG_Unchecked"/>
+            </Grid>
+
+            <!-- 操作员 -->
+            <TextBox x:Name="TxtUser"
+                     materialDesign:HintAssist.Hint="操作员（必填）"
+                     Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                     Margin="0,10,0,0" FontSize="13"/>
+
+            <!-- 备注 -->
+            <TextBox x:Name="TxtComment"
+                     materialDesign:HintAssist.Hint="备注"
+                     Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                     Margin="0,6,0,0" FontSize="13"
+                     AcceptsReturn="True" MinHeight="56"
+                     TextWrapping="Wrap"/>
+
+            <!-- 按钮 -->
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="提交复判"
+                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        Click="BtnSubmit_Click" Height="42"
+                        Background="#1E40AF" Foreground="White" FontSize="14"/>
+                <Button Grid.Column="2" Content="← 返回列表"
+                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        Click="BtnBack_Click" Height="42" FontSize="13"/>
+            </Grid>
+
+            <TextBlock x:Name="TxtError" Foreground="#EF4444" FontSize="12"
+                       Visibility="Collapsed" Margin="0,8,0,0"/>
+        </StackPanel>
+    </Border>
+</UserControl>

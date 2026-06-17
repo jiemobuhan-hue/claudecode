@@ -1,0 +1,58 @@
+<h2>第三层布局改进方案</h2>
+<p class="subtitle">当前：第三层嵌在右侧面板底部，宽度 ~350px，图片区域被严重挤压</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>替换式：第三层覆盖整个右侧面板（推荐）</h3>
+      <p>点击缺陷后，DefectDetailContainer 撑满右侧面板，替换掉缺陷列表。点"返回列表"恢复列表。第三层获得完整 ~400px 宽度 + 全高。</p>
+      <div style="background:#0f172a; border-radius:8px; padding:12px; margin-top:8px;">
+        <div style="display:flex; gap:10px;">
+          <div style="flex:3; background:#1a1a2e; border-radius:4px; min-height:200px; display:flex; align-items:center; justify-content:center;">
+            <span style="color:#64748b;">大图 + Canvas</span>
+          </div>
+          <div style="flex:2; background:#1e293b; border:2px solid #34d399; border-radius:4px; padding:12px; min-height:200px;">
+            <div style="color:#34d399; font-size:12px; font-weight:bold;">← 返回列表</div>
+            <div class="placeholder" style="height:120px; margin-top:8px;">缺陷裁剪图 300×300</div>
+            <div style="color:white; font-size:11px; margin-top:4px;">类型: 划痕 | 92%</div>
+            <div style="display:flex; gap:4px; margin-top:4px;">
+              <button class="mock-button" style="background:#22c55e; font-size:10px;">OK</button>
+              <button class="mock-button" style="background:#ef4444; font-size:10px;">NG</button>
+            </div>
+            <input class="mock-input" placeholder="操作员" style="font-size:10px; margin-top:4px;">
+            <button class="mock-button" style="background:#1e40af; font-size:10px; margin-top:4px; width:100%;">提交</button>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>第三层空间充足</li><li>改动量最小</li><li>切换回列表只需点击返回</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>看第三层时看不到缺陷列表</li></ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>浮动式：第三层作为独立浮窗覆盖在图片区上方</h3>
+      <p>DefectReviewControl 以独立浮窗（~500×500）居中显示在 GridOverlay 上层，不占用右侧面板空间。</p>
+      <div style="background:#0f172a; border-radius:8px; padding:12px; margin-top:8px;">
+        <div style="position:relative; background:#1a1a2e; border-radius:4px; min-height:200px; display:flex; align-items:center; justify-content:center;">
+          <span style="color:#64748b;">大图 + Canvas + 右侧列表</span>
+          <div style="position:absolute; top:10px; right:80px; background:#1e293b; border:2px solid #34d399; border-radius:8px; padding:12px; width:220px; box-shadow:0 4px 20px rgba(0,0,0,0.5);">
+            <div class="placeholder" style="height:100px;">裁剪图</div>
+            <div style="color:white; font-size:10px;">类型: 划痕 | 92%</div>
+            <div style="display:flex; gap:4px; margin-top:4px;">
+              <button class="mock-button" style="font-size:9px;">OK</button>
+              <button class="mock-button" style="font-size:9px;">NG</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>缺陷列表和大图同时可见</li><li>浮窗可拖动</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>浮窗遮挡大图缺陷标注</li><li>实现复杂度更高</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

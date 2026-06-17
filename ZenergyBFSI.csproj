@@ -435,19 +435,20 @@
     <Compile Include="Model\InspectionUtils.cs" />
     <Compile Include="Model\Log.cs" />
     <Compile Include="Model\Messages\DashboardMessages.cs" />
+    <Compile Include="Model\MomCheckResult.cs" />
     <Compile Include="Model\MOM\BaseRequest.cs" />
     <Compile Include="Model\MOM\BaseResponse.cs" />
+    <Compile Include="Model\MOM\CellInput.cs" />
     <Compile Include="Model\MOM\CellOutput.cs" />
+    <Compile Include="Model\MOM\DevVersionCheck.cs" />
     <Compile Include="Model\MOM\EqptAlert.cs" />
     <Compile Include="Model\MOM\EqptAlive.cs" />
     <Compile Include="Model\MOM\EqptRun.cs" />
     <Compile Include="Model\MOM\EqptStatus.cs" />
-    <Compile Include="Model\MOM\Injection2Input.cs" />
-    <Compile Include="Model\MOM\MaterialDownLoad.cs" />
+    <Compile Include="Model\MOM\EqptWipOrder.cs" />
     <Compile Include="Model\MOM\MaterialUpLoad.cs" />
     <Compile Include="Model\MOM\ParameterCheck.cs" />
-    <Compile Include="Model\MOM\PartDownLoad.cs" />
-    <Compile Include="Model\MOM\PartUpLoad.cs" />
+    <Compile Include="Model\MOM\WipOrderRequest.cs" />
     <Compile Include="Model\ParameterInfo.cs" />
     <Compile Include="Model\PlcBlock.cs" />
     <Compile Include="Model\ProductionItem.cs" />
@@ -457,12 +458,17 @@
     <Compile Include="Model\Vision\T_HarnessMeasure.cs" />
     <Compile Include="Model\WebViewBridge.cs" />
     <Compile Include="Service\AutoRun.cs" />
+    <Compile Include="Service\CRUDServices\BlueFilmDataMOMRepository.cs" />
     <Compile Include="Service\CRUDServices\BlueFilmDetectionRepository.cs" />
     <Compile Include="Service\CRUDServices\BlueFilmRecipeParametersRepository.cs" />
     <Compile Include="Service\CRUDServices\HarnessMeasureRepository.cs" />
     <Compile Include="Service\DashboardService.cs" />
     <Compile Include="Service\DashboardWorker.cs" />
-    <Compile Include="Service\SimulationDataGenerator.cs" />
+    <Compile Include="Service\MomCircuitBreaker.cs" />
+    <Compile Include="Service\MomClient.cs" />
+    <Compile Include="Service\MomHandler.cs" />
+    <Compile Include="Service\MomOfflineQueue.cs" />
+
     <Compile Include="Service\FinsNetOmron.cs" />
     <Compile Include="Service\LogHelper.cs" />
     <Compile Include="Service\Settings.cs" />
@@ -471,7 +477,6 @@
     <Compile Include="Model\ValveInfo.cs" />
     <Compile Include="Service\CodeReader_1.cs" />
     <Compile Include="Service\ICReader.cs" />
-    <Compile Include="Service\MomHandler.cs" />
     <Compile Include="Service\SQLiteGenericHelper.cs" />
     <Compile Include="Service\SqlServerDapperHelper.cs" />
     <Compile Include="View\Bars\UC_StatesBar.xaml.cs">
@@ -490,8 +495,8 @@
     <Compile Include="View\StateCards\UC_InspectionView.xaml.cs">
       <DependentUpon>UC_InspectionView.xaml</DependentUpon>
     </Compile>
-    <Compile Include="View\StateCards\UC_ProductDashboard.xaml.cs">
-      <DependentUpon>UC_ProductDashboard.xaml</DependentUpon>
+    <Compile Include="View\StateCards\DefectReviewControl.xaml.cs">
+      <DependentUpon>DefectReviewControl.xaml</DependentUpon>
     </Compile>
     <Compile Include="View\StateCards\UC_SettingsPages.xaml.cs">
       <DependentUpon>UC_SettingsPages.xaml</DependentUpon>
@@ -661,7 +666,7 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="View\StateCards\UC_ProductDashboard.xaml">
+    <Page Include="View\StateCards\DefectReviewControl.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -718,9 +723,7 @@
     <WCFMetadata Include="Connected Services\" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="Data\" />
     <None Include="Data\CreateBlueFilmRecipeParameters.sql" />
-    <Folder Include="Images\" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include=".NETFramework,Version=v4.8">
@@ -742,6 +745,9 @@
       <Project>{412c734b-f5ed-4087-a3e9-5347deeb4432}</Project>
       <Name>PLCHandler</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Images\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="packages\Microsoft.ApplicationInsights.DependencyCollector.2.23.0\build\Microsoft.ApplicationInsights.DependencyCollector.targets" Condition="Exists('packages\Microsoft.ApplicationInsights.DependencyCollector.2.23.0\build\Microsoft.ApplicationInsights.DependencyCollector.targets')" />

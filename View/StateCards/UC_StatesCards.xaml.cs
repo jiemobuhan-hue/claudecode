@@ -125,17 +125,8 @@ namespace ZenergyBFSI.View.StateCards
             StartClock();
             Loaded += (_, __) =>
             {
-                // Bug 4 修复：移除此处重复的 Messenger 订阅。
-                // DashboardUpdateMessage / StatusLightUpdateMessage 已由 UC_Home.OnLoaded 订阅，
-                // UC_Home 会直接调用 _dash.UpdateDashboard() / _dash.UpdateStatusLight()。
-                // 若在此处重复注册，每条消息会触发 UpdateDashboard 两次，导致 _currentPage 被二次重置。
-                // Messenger.Default.Register<DashboardUpdateMessage>(this, OnDashboardUpdateMessage);
-                // Messenger.Default.Register<StatusLightUpdateMessage>(this, OnStatusLightUpdateMessage);
-
-                //RedrawHourly();
-
-                // 直接调用 UpdateDashboard 渲染测试数据（不依赖数据库）
-                //DashboardWorkerTests.RunTests(this);
+                Messenger.Default.Register<DashboardUpdateMessage>(this, OnDashboardUpdateMessage);
+                Messenger.Default.Register<StatusLightUpdateMessage>(this, OnStatusLightUpdateMessage);
             };
             DataContext = this;
         }
@@ -157,93 +148,7 @@ namespace ZenergyBFSI.View.StateCards
             _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _clockTimer.Tick += (_, __) =>
             {
-
                 TxtClock.Text = DateTime.Now.ToString("HH:mm:ss");
-
-                #region 测试数据
-                var now = DateTime.Now;
-                var windowStart = now.AddHours(-12);  // 与 QueryAndParse 的 windowStart 一致
-
-                // Bug 9 修复：在循环内 new Random() 时，多个实例在同一毫秒内拥有相同 TickCount 种子，
-                // 导致所有 12 个小时桶产生完全相同的 OK/NG 值，测试数据无意义。
-                // 修复：使用单一 Random 实例贯穿整个构造过程。
-                var rng = new Random();
-
-                // 时段数据：12个小时桶，hour 值必须与 windowStart.Hour + i 对齐
-                var hourly = new List<HourlyData>();
-                for (int i = 0; i < 12; i++)
-                {
-                    int hour = (windowStart.Hour + i) % 24;
-                    int ok = 30 + rng.Next(10);  // 每小时30-39条OK
-                    int ng = 3 + rng.Next(4);    // 每小时3-6条NG
-                    hourly.Add(new HourlyData
-                    {
-                        Hour = hour,  // "HH:00" 格式，与 ParseRecords 一致
-                        Ok = ok,
-                        Ng = ng
-                    });
-                }
-
-                // KPI汇总：基于 hourly 总数，与 ParseRecords 逻辑一致
-                int total = hourly.Sum(h => h.Ok + h.Ng);
-                int okCount = hourly.Sum(h => h.Ok);
-                int ngCount = hourly.Sum(h => h.Ng);
-                double yieldRate = total > 0 ? okCount * 100.0 / total : 0;
-
-                // NG类型数据：8种类型，模拟真实分布
-                var ngTypes = new List<NgTypeData>
-            {
-                new NgTypeData { Name = "外观划伤", Count = 30 + rng.Next(10) },
-                new NgTypeData { Name = "气泡",     Count = 32+ rng.Next(10) },
-                new NgTypeData { Name = "色差",     Count = 18 + rng.Next(10)},
-                new NgTypeData { Name = "变形",     Count = 12 + rng.Next(10)},
-                new NgTypeData { Name = "污渍",     Count = 8+ rng.Next(10) },
-                new NgTypeData { Name = "凹陷",     Count = 5 + rng.Next(10)},
-                new NgTypeData { Name = "凸点",     Count = 3 + rng.Next(10)},
-                new NgTypeData { Name = "裂纹",     Count = 2 + rng.Next(10)}
-            };
-
-                // 最近记录：20条，时间分布在12小时窗口内（而非全挤在最近1小时）
-                var recent = new List<RecentRecord>();
-                var stations = new[] { "工位1", "工位2", "工位3", "工位4" };
-                var ngTypeList = new[] { "外观划伤", "气泡", "色差" };
-
-                for (int i = 0; i < 20; i++)
-                {
-                    // 时间均匀分布在12小时窗口内
-                    double t = (double)i / 20.0;  // 0.0 ~ 0.95
-                    var entryTime = windowStart.AddMinutes(t * 12 * 60);
-
-                    bool isInbound = i < 3;  // 前3条进站
-                    bool isNg = !isInbound && i % 4 == 0;  // 出站中约25%NG
-
-                    recent.Add(new RecentRecord
-                    {
-                        CellCode = $"TEST{i + 1:D4}",
-                        DateTime = entryTime.ToString("yyyy/MM/dd HH:mm:ss"),
-                        StationId = stations[i % 4],
-                        OverallResult = isInbound ? "OK" : (isNg ? "NG" : "OK"),
-                        NgTypes = isNg ? $"{ngTypeList[i % 3]}|{ngTypeList[(i + 1) % 3]}" : "",
-                        ProcessMs = isInbound ? 0 : 30000 + rng.Next(60000),  // 复用上方 rng 实例
-                        IsInbound = isInbound
-                    });
-                }
-
-                var data= new DashboardData
-                {
-                    Total = total,
-                    Ok = okCount,
-                    Ng = ngCount,
-                    YieldRate = yieldRate,
-                    Hourly = hourly,
-                    NgTypes = ngTypes,
-                    Recent = recent,
-                    TotalCount = total,   // 模拟场景：总记录数 = 当前页记录数（单页测试）
-                    PageIndex = 0         // 测试始终从第0页开始
-                };
-                this.UpdateDashboard(data); 
-                #endregion
-
             };
             _clockTimer.Start();
         }
@@ -251,35 +156,75 @@ namespace ZenergyBFSI.View.StateCards
         // ════════════════════════════════════════════════════════
         //  KPI 更新
         // ════════════════════════════════════════════════════════
+        #region [TASK-REFACTOR-002] ApplyKpi — KPI 显示修正 | 2026-05-15 | AI生成
+        // 修复：
+        //   1. OK/NG 占比基于出站总数 (d.Ok + d.Ng)，而非 Total（含进站）
+        //   2. TxtRecordCount 使用 d.TotalCount（窗口真实总量），而非当前页条数
+        //   3. 良率达标判定阈值保持 99.5%
         private void ApplyKpi(DashboardData d)
         {
+            int outboundTotal = d.Ok + d.Ng;
+
             TxtTotal.Text = d.Total.ToString();
             TxtOk.Text = d.Ok.ToString();
             TxtNg.Text = d.Ng.ToString();
             TxtRate.Text = $"{d.YieldRate:F2}%";
 
-            TxtTotalSub.Text = $"{(_currentShift == "all" ? "全天" : _currentShift + "班")}累计";
-            TxtOkSub.Text = d.Total > 0 ? $"占比 {d.Ok * 100.0 / d.Total:F1}%" : "--";
-            TxtNgSub.Text = d.Total > 0 ? $"占比 {d.Ng * 100.0 / d.Total:F1}%" : "--";
-            TxtRateSub.Text = d.YieldRate >= 99.5 ? "✓ 达标 (目标 ≥99.5%)" : "✗ 未达标 (目标 ≥99.5%)";
-            TxtRecordCount.Text = $"第 {_currentPage + 1}/{_totalPages} 页 共 {d.Recent.Count} 条";
+            #region [TASK-REFACTOR-004] 班次标签映射 | 2026-05-15 | AI生成
+            string shiftLabel = _currentShift switch
+            {
+                "A" => "白班 (08:00-20:00)",
+                "B" => "晚班 (昨20:00-今08:00)",
+                "C" => "C班",
+                _   => "全天 (00:00-24:00)"
+            };
+            TxtTotalSub.Text = $"{shiftLabel}累计";
+            #endregion
+            TxtOkSub.Text = outboundTotal > 0
+                ? $"占比 {d.Ok * 100.0 / outboundTotal:F1}%"
+                : "--";
+            TxtNgSub.Text = outboundTotal > 0
+                ? $"占比 {d.Ng * 100.0 / outboundTotal:F1}%"
+                : "--";
+            TxtRateSub.Text = d.YieldRate >= 99.5
+                ? "✓ 达标 (目标 ≥99.5%)"
+                : "✗ 未达标 (目标 ≥99.5%)";
+            TxtRecordCount.Text = $"第 {_currentPage + 1}/{_totalPages} 页 共 {d.TotalCount} 条";
 
             _hourlyData = d.Hourly;
         }
+        #endregion
 
+
+        #region [TASK-REFACTOR-005] RedrawHourly — 三分类堆叠柱 | 2026-05-15 | AI生成
+        // 新增 "检测中" 堆叠柱，与 OK/NG 并列显示。
+        // 顺序：检测中（蓝）→ OK（绿）→ NG（红），底部→顶部堆叠。
+        private int _lastHourlyHash = 0;
 
         public void RedrawHourly()
         {
             if (_hourlyData == null || _hourlyData.Count == 0) return;
-            #region 可疑代码 
+
             var diagram = NgHourlyChart?.Diagram as XYDiagram2D;
             if (diagram == null) return;
 
+            int hash = ComputeHourlyHash(_hourlyData);
+            if (hash == _lastHourlyHash && diagram.Series.Count > 0) return;
+            _lastHourlyHash = hash;
+
             diagram.Series.Clear();
+
+            var pendingSeries = new BarStackedSeries2D
+            {
+                DisplayName = "检测中",
+                Brush = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
+                LabelsVisibility = true
+            };
+            pendingSeries.Label = new SeriesLabel { TextPattern = "{V}" };
 
             var okSeries = new BarStackedSeries2D
             {
-                DisplayName = "OK 产量",
+                DisplayName = "OK",
                 Brush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)),
                 LabelsVisibility = true
             };
@@ -287,7 +232,7 @@ namespace ZenergyBFSI.View.StateCards
 
             var ngSeries = new BarStackedSeries2D
             {
-                DisplayName = "NG 产量",
+                DisplayName = "NG",
                 Brush = new SolidColorBrush(Color.FromRgb(0xF4, 0x43, 0x36)),
                 LabelsVisibility = true
             };
@@ -295,16 +240,28 @@ namespace ZenergyBFSI.View.StateCards
 
             foreach (var h in _hourlyData)
             {
+                pendingSeries.Points.Add(new SeriesPoint(h.Hour, h.Pending));
                 okSeries.Points.Add(new SeriesPoint(h.Hour, h.Ok));
                 ngSeries.Points.Add(new SeriesPoint(h.Hour, h.Ng));
-
             }
+            diagram.Series.Add(pendingSeries);
             diagram.Series.Add(okSeries);
             diagram.Series.Add(ngSeries);
-            #endregion
-
-
         }
+
+        private static int ComputeHourlyHash(List<HourlyData> hourly)
+        {
+            int hash = 17;
+            foreach (var h in hourly)
+            {
+                hash = hash * 31 + h.Hour;
+                hash = hash * 31 + h.Pending;
+                hash = hash * 31 + h.Ok;
+                hash = hash * 31 + h.Ng;
+            }
+            return hash;
+        }
+        #endregion
 
         private void ApplyNgTypes(List<NgTypeData> types)
         {
@@ -419,14 +376,23 @@ namespace ZenergyBFSI.View.StateCards
         // ════════════════════════════════════════════════════════
         //  事件处理
         // ════════════════════════════════════════════════════════
+        #region [TASK-REFACTOR-004] 事件处理 — 班次/日期驱动看板查询 | 2026-05-15 | AI生成
+        // 班次切换或日期变更时，直接调用 DashboardService.SetFilter，
+        // 由 DashboardWorker 重算固定窗口并重新查询。
         private void BtnRefresh_Click(object sender, RoutedEventArgs e)
-            => RefreshRequested?.Invoke(this, EventArgs.Empty);
+        {
+            DashboardService.I.SetFilter(_currentShift, DpDate.SelectedDate);
+            RefreshRequested?.Invoke(this, EventArgs.Empty);
+        }
 
         private void DpDate_SelectedDateChanged(object sender,
             SelectionChangedEventArgs e)
         {
             if (DpDate.SelectedDate.HasValue)
+            {
+                DashboardService.I.SetFilter(_currentShift, DpDate.SelectedDate.Value);
                 DateChanged?.Invoke(this, DpDate.SelectedDate.Value);
+            }
         }
 
         private void ShiftRadio_Checked(object sender, RoutedEventArgs e)
@@ -434,9 +400,11 @@ namespace ZenergyBFSI.View.StateCards
             if (sender is RadioButton rb && rb.Tag is string tag)
             {
                 _currentShift = tag;
+                DashboardService.I.SetFilter(tag, DpDate.SelectedDate);
                 ShiftChanged?.Invoke(this, tag);
             }
         }
+        #endregion
 
         private void TglNgOnly_Checked(object sender, RoutedEventArgs e)
             => ApplyNgFilter();

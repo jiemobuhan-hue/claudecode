@@ -1,0 +1,31 @@
+<UserControl x:Class="PLCHandler.View.SignalMonitorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             Background="#1E1E1E">
+    <Grid>
+        <dxg:GridControl x:Name="gridSignals"
+                         ItemsSource="{Binding Signals}">
+            <dxg:GridControl.View>
+                <dxg:TableView Name="signalTableView"
+                               AllowEditing="False"/>
+            </dxg:GridControl.View>
+            <!-- 状态图标 -->
+            <dxg:GridColumn FieldName="StatusIcon" Header="" Width="40" ReadOnly="True"/>
+            <!-- 信号名称 -->
+            <dxg:GridColumn FieldName="Name" Header="名称" Width="120" ReadOnly="True"/>
+            <!-- 地址 -->
+            <dxg:GridColumn FieldName="Address" Header="地址" Width="100" ReadOnly="True"/>
+            <!-- 数据类型 -->
+            <dxg:GridColumn FieldName="DataType" Header="类型" Width="70" ReadOnly="True"/>
+            <!-- 当前值 -->
+            <dxg:GridColumn FieldName="DisplayValue" Header="当前值" Width="150" ReadOnly="True"/>
+            <!-- 变化标记 -->
+            <dxg:GridColumn FieldName="ChangeIcon" Header="★" Width="40" ReadOnly="True"/>
+            <!-- 最后更新 -->
+            <dxg:GridColumn FieldName="LastUpdateTime" Header="更新时间" Width="90" ReadOnly="True"/>
+            <!-- PLC来源 -->
+            <dxg:GridColumn FieldName="PlcId" Header="PLC" Width="80" ReadOnly="True"/>
+        </dxg:GridControl>
+    </Grid>
+</UserControl>
