@@ -211,21 +211,23 @@ namespace ZenergyBFSI.Service
             {
                 if (_readQueue.TryDequeue(out var request))
                 {
+                    CellData result = null;
                     try
                     {
-                        var result = await ProcessReadRequestAsync(request);
+                        result = await ProcessReadRequestAsync(request);
                         // 10s 整体超时保护
                         if ((DateTime.Now - request.EnqueueTime).TotalSeconds > 10)
                             result = new CellData { 电芯码 = request.CellCode, 出站结果 = "OK" };
-
-                        request.Completion.TrySetResult(result);
                     }
                     catch (Exception ex)
                     {
                         Rlog.Error($"[BlueFilmDataQueue] ReadConsumer 异常: {ex.Message}");
+                    }
+                    finally
+                    {
                         // 确保不泄漏 TCS
                         request.Completion.TrySetResult(
-                            new CellData { 电芯码 = request.CellCode, 出站结果 = "OK" });
+                            result ?? new CellData { 电芯码 = request.CellCode, 出站结果 = "OK" });
                     }
                 }
                 else
