@@ -70,6 +70,7 @@ namespace ZenergyBFSI.Service
 
         private volatile bool _initialized = false;
         private readonly object _initLock = new object();
+        private volatile bool _disposed = false;
 
         /// <summary>
         /// 初始化队列管理器 — 创建 3 组 Repository + 启动 3 个后台消费者 + 重试定时器
@@ -110,6 +111,7 @@ namespace ZenergyBFSI.Service
 
         public void Dispose()
         {
+            _disposed = true;
             _cts?.Cancel();
             _retryTimer?.Dispose();
 
@@ -119,7 +121,7 @@ namespace ZenergyBFSI.Service
                 var tasks = new[] { _readConsumerTask, _writeDetectionConsumerTask, _writeMOMConsumerTask };
                 Task.WaitAll(tasks, 5000);
             }
-            catch { /* 超时不阻塞 Dispose */ }
+            catch (AggregateException) { /* 超时不阻塞 Dispose */ }
 
             _cts?.Dispose();
         }
@@ -138,6 +140,7 @@ namespace ZenergyBFSI.Service
         /// <returns>聚合后的 CellData（含 Ng类型1~8 缺陷描述）</returns>
         public Task<CellData> EnqueueReadAsync(string cellCode, int channelNo)
         {
+            if (_disposed) throw new ObjectDisposedException(nameof(BlueFilmDataQueueManager));
             var tcs = new TaskCompletionSource<CellData>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -158,6 +161,7 @@ namespace ZenergyBFSI.Service
         /// </summary>
         public void EnqueueDetectionResult(T_BlueFilmDetection data)
         {
+            if (_disposed) { Rlog.Warn("[BlueFilmDataQueue] 队列已释放，丢弃检测结果写入"); return; }
             if (data != null)
                 _writeDetectionQueue.Enqueue(data);
         }
@@ -168,6 +172,7 @@ namespace ZenergyBFSI.Service
         /// </summary>
         public void EnqueueMOMOutbound(T_BlueFilmDataMOM data)
         {
+            if (_disposed) { Rlog.Warn("[BlueFilmDataQueue] 队列已释放，丢弃MOM出站写入"); return; }
             if (data != null)
                 _writeMOMQueue.Enqueue(data);
         }
@@ -177,6 +182,7 @@ namespace ZenergyBFSI.Service
         /// </summary>
         public void EnqueueDetectionResultBatch(IEnumerable<T_BlueFilmDetection> dataList)
         {
+            if (_disposed) { Rlog.Warn("[BlueFilmDataQueue] 队列已释放，丢弃批量检测结果写入"); return; }
             if (dataList == null) return;
             foreach (var data in dataList)
                 if (data != null)
