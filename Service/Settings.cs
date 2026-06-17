@@ -45,6 +45,20 @@ namespace ZenergyBFSI.Model
         public static string SQLServer视觉库名 { get; internal set; } = "VisionProgram";
         public static string SQLServer视觉用户 { get; internal set; } = "merj";
         public static string SQLServer视觉密码 { get; internal set; } = "1234@abcD";
+
+        // ── 三库连接字符串（异步数据底座） ──
+        // 本地主库 — 具名实例 @"" 中写单反斜杠 \RJ
+        public static string SQLServer本地连接 { get; internal set; }
+            = @"Data Source=DESKTOP-0F9L4KO\RJ;Initial Catalog=VisionProgram;User ID=merj;Password=1234@abcD;TrustServerCertificate=True";
+
+        // 远程库1
+        public static string SQLServer远程连接1 { get; internal set; }
+            = @"Data Source=DESKTOP-NHDST87;Initial Catalog=VisionProgram;User ID=merj;Password=1234@abcD;TrustServerCertificate=True";
+
+        // 远程库2
+        public static string SQLServer远程连接2 { get; internal set; }
+            = @"Data Source=DESKTOP-2ADDTIC;Initial Catalog=VisionProgram;User ID=merj;Password=1234@abcD;TrustServerCertificate=True";
+
         private static Settings _instance = null;
         private static readonly object _syncRoot = new object();
         private static bool[] _power = null;
