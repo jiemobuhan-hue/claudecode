@@ -1,13 +1,14 @@
+using Newtonsoft.Json;
 using RinKit;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ZenergyBFSI.Model;
 using ZenergyBFSI.Model.Vision;
 using ZenergyBFSI.Service.CRUDServices;
-using System.Linq;
 
 namespace ZenergyBFSI.Service
 {
@@ -382,23 +383,229 @@ namespace ZenergyBFSI.Service
 
         #endregion
 
-        #pragma warning disable CS1998
+        #region WriteConsumer — 三库写入（本地优先，远程容错 3s 超时）
+
+        /// <summary>
+        /// 检测结果写入消费者
+        /// </summary>
         private async Task WriteDetectionConsumerLoop(CancellationToken token)
         {
-            // 将在 Task 6 中实现
-            await Task.CompletedTask;
+            while (!token.IsCancellationRequested)
+            {
+                if (_writeDetectionQueue.TryDequeue(out var data))
+                {
+                    try { await WriteDetectionToAllDbsAsync(data); }
+                    catch (Exception ex) { Rlog.Error($"[BlueFilmDataQueue] WriteDetectionConsumer 异常: {ex.Message}"); }
+                }
+                else
+                {
+                    await Task.Delay(10, token);
+                }
+            }
         }
 
+        /// <summary>
+        /// MOM 出站写入消费者
+        /// </summary>
         private async Task WriteMOMConsumerLoop(CancellationToken token)
         {
-            // 将在 Task 6 中实现
-            await Task.CompletedTask;
+            while (!token.IsCancellationRequested)
+            {
+                if (_writeMOMQueue.TryDequeue(out var data))
+                {
+                    try { await WriteMOMToAllDbsAsync(data); }
+                    catch (Exception ex) { Rlog.Error($"[BlueFilmDataQueue] WriteMOMConsumer 异常: {ex.Message}"); }
+                }
+                else
+                {
+                    await Task.Delay(10, token);
+                }
+            }
         }
-        #pragma warning restore CS1998
 
+        /// <summary>
+        /// WriteRouter — Detection 写入三库
+        /// 本地优先确保 → 远程1 (3s) → 远程2 (3s)
+        /// </summary>
+        private async Task WriteDetectionToAllDbsAsync(T_BlueFilmDetection data)
+        {
+            // 1. 本地库（优先确保，不设超时）
+            try
+            {
+                await Task.Run(() => _detectionRepoLocal.Insert(data));
+            }
+            catch (Exception ex)
+            {
+                Rlog.Error($"[BlueFilmDataQueue] 本地库写入失败 | 类型: Detection | 异常: {ex.Message} | 时间: {DateTime.Now}");
+                throw; // 本地库失败不吞异常
+            }
+
+            // 2. 远程库1（3s 超时，失败入重试队列）
+            await WriteToRemoteWithRetryAsync(
+                data, _detectionRepoRemote1,
+                "DESKTOP-NHDST87",
+                Settings.SQLServer远程连接1,
+                "Detection");
+
+            // 3. 远程库2（3s 超时，失败入重试队列）
+            await WriteToRemoteWithRetryAsync(
+                data, _detectionRepoRemote2,
+                "DESKTOP-2ADDTIC",
+                Settings.SQLServer远程连接2,
+                "Detection");
+        }
+
+        /// <summary>
+        /// WriteRouter — MOM 出站写入三库
+        /// </summary>
+        private async Task WriteMOMToAllDbsAsync(T_BlueFilmDataMOM data)
+        {
+            // 1. 本地库
+            try
+            {
+                await Task.Run(() => _momRepoLocal.Insert(data));
+            }
+            catch (Exception ex)
+            {
+                Rlog.Error($"[BlueFilmDataQueue] 本地库写入失败 | 类型: MOM | 异常: {ex.Message} | 时间: {DateTime.Now}");
+                throw;
+            }
+
+            // 2. 远程库1
+            await WriteToRemoteWithRetryAsync(
+                data, _momRepoRemote1,
+                "DESKTOP-NHDST87",
+                Settings.SQLServer远程连接1,
+                "MOM");
+
+            // 3. 远程库2
+            await WriteToRemoteWithRetryAsync(
+                data, _momRepoRemote2,
+                "DESKTOP-2ADDTIC",
+                Settings.SQLServer远程连接2,
+                "MOM");
+        }
+
+        /// <summary>
+        /// 远程库写入 — 3s 超时，失败入重试缓冲区
+        /// dynamic repo 参数在运行时调度 Insert(T) 方法
+        /// </summary>
+        private async Task WriteToRemoteWithRetryAsync<T>(
+            T payload,
+            dynamic repo,
+            string serverName,
+            string connString,
+            string payloadType)
+        {
+            using var cts = new CancellationTokenSource(3000);
+            try
+            {
+                await Task.Run(() =>
+                {
+                    repo.Insert(payload);
+                }, cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                EnqueueRetryItem(connString, serverName, payload, payloadType,
+                    "写入超时 (3s)");
+            }
+            catch (Exception ex)
+            {
+                EnqueueRetryItem(connString, serverName, payload, payloadType,
+                    ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// 将失败记录入重试缓冲区
+        /// </summary>
+        private void EnqueueRetryItem(string connString, string serverName,
+            object payload, string payloadType, string errorMessage)
+        {
+            var now = DateTime.Now;
+            _retryBuffer.Enqueue(new DataRetryItem
+            {
+                TargetConnectionString = connString,
+                TargetServerName = serverName,
+                Payload = payload,
+                PayloadType = payloadType,
+                RetryCount = 1,
+                FirstFailTime = now,
+                LastFailTime = now,
+                LastErrorMessage = errorMessage
+            });
+
+            Rlog.Error($"[BlueFilmDataQueue] 远程库写入失败 | 服务器: {serverName} | 类型: {payloadType} | 异常: {errorMessage} | 时间: {now:yyyy-MM-dd HH:mm:ss}");
+        }
+
+        #endregion
+
+        #region RetryTimer — 30s 周期重试补录
+
+        /// <summary>
+        /// 重试定时器回调 — 遍历 _retryBuffer，
+        /// 成功移除，失败重新入队，超过 10 次标记 Failed 丢弃
+        /// </summary>
         private void RetryCallback()
         {
-            // 将在 Task 6 中实现
+            if (_retryBuffer.IsEmpty) return;
+
+            // 取出所有待重试项
+            var items = new List<DataRetryItem>();
+            while (_retryBuffer.TryDequeue(out var item))
+                items.Add(item);
+
+            foreach (var item in items)
+            {
+                if (item.RetryCount >= 10)
+                {
+                    Rlog.Error($"[BlueFilmDataQueue] 重试次数耗尽 | 服务器: {item.TargetServerName} | 首次失败: {item.FirstFailTime:yyyy-MM-dd HH:mm:ss} | 数据: {JsonConvert.SerializeObject(item.Payload)}");
+                    continue; // 丢弃
+                }
+
+                item.RetryCount++;
+                item.LastFailTime = DateTime.Now;
+
+                try
+                {
+                    using var cts = new CancellationTokenSource(3000);
+                    var task = Task.Run(() =>
+                    {
+                        if (item.PayloadType == "Detection")
+                        {
+                            var repo = new BlueFilmDetectionRepository(item.TargetConnectionString);
+                            repo.Insert((T_BlueFilmDetection)item.Payload);
+                        }
+                        else if (item.PayloadType == "MOM")
+                        {
+                            var repo = new BlueFilmDataMOMRepository(item.TargetConnectionString);
+                            repo.Insert((T_BlueFilmDataMOM)item.Payload);
+                        }
+                    }, cts.Token);
+
+                    if (task.Wait(3000, cts.Token))
+                    {
+                        Rlog.Info($"[BlueFilmDataQueue] 重试成功 | 服务器: {item.TargetServerName} | 第{item.RetryCount}次");
+                        continue;
+                    }
+
+                    item.LastErrorMessage = "重试超时 (3s)";
+                }
+                catch (OperationCanceledException)
+                {
+                    item.LastErrorMessage = "重试超时 (3s)";
+                }
+                catch (Exception ex)
+                {
+                    item.LastErrorMessage = ex.Message;
+                }
+
+                // 失败，重新入队
+                _retryBuffer.Enqueue(item);
+            }
         }
+
+        #endregion
     }
 }
