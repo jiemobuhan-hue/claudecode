@@ -21,7 +21,6 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using ViewModels;
 using ZenergyBFSI.Service;
-using ZenergyBFSI.Service.CRUDServices;
 using ZenergyBFSI.View;
 using ZenergyBFSI.Model.Vision;
 using static ZenergyBFSI.Model.AutoRun;
@@ -48,7 +47,6 @@ namespace ZenergyBFSI.Model
         private static AutoRun _instance;
         private static readonly object _plcLock = new object();
         private static readonly object _momLock = new object();
-        private static readonly object _listDataLock = new object();
         private volatile bool _running = false;
         private CancellationTokenSource _cts;
 
@@ -280,14 +278,6 @@ namespace ZenergyBFSI.Model
 
         #endregion
 
-        #region 配置初始化需要的字段
-        private string GetVisionConnectionString() =>
-            $"Data Source={Settings.SQLServer视觉地址};Initial Catalog={Settings.SQLServer视觉库名};User ID={Settings.SQLServer视觉用户};Password={Settings.SQLServer视觉密码};TrustServerCertificate=True";
-
-        private HarnessMeasureRepository _localHarnessMeasureRepositoryA;
-        private BlueFilmDetectionRepository _localBlueFilmDetectionRepositoryA; 
-
-        #endregion
 
 
         public static AutoRun I
@@ -317,8 +307,7 @@ namespace ZenergyBFSI.Model
                 //初始化数据库脚本
                 //TODO
                 //在这里初始化所有的视觉工控机的SQLserver连接
-                _localHarnessMeasureRepositoryA = new HarnessMeasureRepository(GetVisionConnectionString());
-                _localBlueFilmDetectionRepositoryA = new BlueFilmDetectionRepository(GetVisionConnectionString());
+                BlueFilmDataQueueManager.I.Init();
                 var x = DashboardService.I;
                 //初始化工站数据
                 //TODO
@@ -605,20 +594,14 @@ namespace ZenergyBFSI.Model
                 //Rdb.SelectList(out List<CellData> t,$"SELECT * from CellData WHERE 电芯码 = {tempcode}");
                 // 给数据库查询也加上锁，防止与自动机其他逻辑冲突
                 tempcode = "12138";
-                lock (_listDataLock)
-                {
-                    t = SQLiteGenericHelper.QueryRaw<CellData>($"SELECT * from CellData WHERE 电芯码 = {tempcode}", "CellData");
-                }
+                t = SQLiteGenericHelper.QueryRaw<CellData>($"SELECT * from CellData WHERE 电芯码 = {tempcode}", "CellData");
                 //List<CellData> t= SQLiteGenericHelper.QueryRaw<CellData>($"SELECT * from CellData WHERE 电芯码 = {tempcode}", "CellData");
                 var data = t.FirstOrDefault(i => i.电芯码 == tempcode);
                 //查询MYSQL数据库并赋值给该物料
 
                 if(data is not null)
                 {
-                    lock (_listDataLock)
-                    {
-                        UpdateCellDataFromSQLserver(ref data);
-                    }
+                    UpdateCellDataFromSQLserver(ref data);
                 }
               
                 //TODO
@@ -644,10 +627,7 @@ namespace ZenergyBFSI.Model
                 #region 更新检测结果的数据库表
                 List<CellData> temp = new List<CellData>();
                 temp.Add(data);
-                lock (_listDataLock)
-                {
-                    SQLiteGenericHelper.BulkUpsert<CellData>(temp, "电芯码", "CellData");
-                }
+                SQLiteGenericHelper.BulkUpsert<CellData>(temp, "电芯码", "CellData");
                 #endregion
 
                 // 记录出站统计（看板数据更新）
@@ -682,11 +662,9 @@ namespace ZenergyBFSI.Model
 
             // 收集该物料在所有工控机上的检测记录
             List<T_BlueFilmDetection> temp = new List<T_BlueFilmDetection>();
-            // A工控机
-            foreach (var item in _localBlueFilmDetectionRepositoryA.GetByCellCode(data.电芯码))
-                temp.Add(item);
-            // TODO: B工控机 _localBlueFilmDetectionRepositoryB
-            // TODO: C工控机 _localBlueFilmDetectionRepositoryC
+            // A工控机 — 视觉检测数据已迁移至 BlueFilmDataQueueManager 异步读取
+            // TODO: B工控机 BlueFilmDataQueueManager
+            // TODO: C工控机 BlueFilmDataQueueManager
 
             // 默认值
             data.视觉检测参数一 = "视觉检测参数SQLServer";
@@ -1725,18 +1703,8 @@ namespace ZenergyBFSI.Model
 
                     if (data != null)
                     {
-                        lock (_listDataLock)
-                        {
-                            try
-                            {
-                                //_owner.UpdateCellDataFromSQLserver(ref data);
-
-                            }catch(Exception ex)
-                            {
-
-                            }
-                            
-                        }
+                        // 异步读取视觉检测结果 — 不阻塞自动机线程
+                        data = await BlueFilmDataQueueManager.I.EnqueueReadAsync(tempcode, _channelNo);
 
                         int way = _owner.getlead(data);
 
@@ -1761,6 +1729,18 @@ namespace ZenergyBFSI.Model
 
                         var temp = new List<CellData> { data };
                         SQLiteGenericHelper.BulkUpsert<CellData>(temp, "电芯码", "CellData");
+
+                        // 构建 MOM 出站数据并入队（非阻塞）
+                        var momData = new ZenergyBFSI.Model.Vision.T_BlueFilmDataMOM
+                        {
+                            CellCode = data.电芯码,
+                            SideCellType = Settings.电芯型号,
+                            CreateTime = DateTime.Now,
+                            ParamterCode = "OutboundResult",
+                            ParameterResult = data.出站结果,
+                            Value = data.视觉检测结果
+                        };
+                        BlueFilmDataQueueManager.I.EnqueueMOMOutbound(momData);
 
                         _state.LastCode = tempcode;
                         _state.LastProcessTime = DateTime.Now.Ticks;
