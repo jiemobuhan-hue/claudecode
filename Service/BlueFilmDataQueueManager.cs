@@ -441,18 +441,16 @@ namespace ZenergyBFSI.Service
             }
 
             // 2. 远程库1（3s 超时，失败入重试队列）
-            await WriteToRemoteWithRetryAsync(
+            await WriteDetectionToRemoteWithTimeoutAsync(
                 data, _detectionRepoRemote1,
                 "DESKTOP-NHDST87",
-                Settings.SQLServer远程连接1,
-                "Detection");
+                Settings.SQLServer远程连接1);
 
             // 3. 远程库2（3s 超时，失败入重试队列）
-            await WriteToRemoteWithRetryAsync(
+            await WriteDetectionToRemoteWithTimeoutAsync(
                 data, _detectionRepoRemote2,
                 "DESKTOP-2ADDTIC",
-                Settings.SQLServer远程连接2,
-                "Detection");
+                Settings.SQLServer远程连接2);
         }
 
         /// <summary>
@@ -472,48 +470,57 @@ namespace ZenergyBFSI.Service
             }
 
             // 2. 远程库1
-            await WriteToRemoteWithRetryAsync(
+            await WriteMOMToRemoteWithTimeoutAsync(
                 data, _momRepoRemote1,
                 "DESKTOP-NHDST87",
-                Settings.SQLServer远程连接1,
-                "MOM");
+                Settings.SQLServer远程连接1);
 
             // 3. 远程库2
-            await WriteToRemoteWithRetryAsync(
+            await WriteMOMToRemoteWithTimeoutAsync(
                 data, _momRepoRemote2,
                 "DESKTOP-2ADDTIC",
-                Settings.SQLServer远程连接2,
-                "MOM");
+                Settings.SQLServer远程连接2);
         }
 
         /// <summary>
-        /// 远程库写入 — 3s 超时，失败入重试缓冲区
-        /// dynamic repo 参数在运行时调度 Insert(T) 方法
+        /// 远程库 Detection 写入 — 3s 超时，失败入重试缓冲区
         /// </summary>
-        private async Task WriteToRemoteWithRetryAsync<T>(
-            T payload,
-            dynamic repo,
+        private async Task WriteDetectionToRemoteWithTimeoutAsync(
+            T_BlueFilmDetection payload,
+            BlueFilmDetectionRepository repo,
             string serverName,
-            string connString,
-            string payloadType)
+            string connString)
         {
-            using var cts = new CancellationTokenSource(3000);
-            try
+            var task = Task.Run(() => repo.Insert(payload));
+            if (await Task.WhenAny(task, Task.Delay(3000)) == task)
             {
-                await Task.Run(() =>
-                {
-                    repo.Insert(payload);
-                }, cts.Token);
+                // 成功
             }
-            catch (OperationCanceledException)
+            else
             {
-                EnqueueRetryItem(connString, serverName, payload, payloadType,
+                EnqueueRetryItem(connString, serverName, payload, "Detection",
                     "写入超时 (3s)");
             }
-            catch (Exception ex)
+        }
+
+        /// <summary>
+        /// 远程库 MOM 写入 — 3s 超时，失败入重试缓冲区
+        /// </summary>
+        private async Task WriteMOMToRemoteWithTimeoutAsync(
+            T_BlueFilmDataMOM payload,
+            BlueFilmDataMOMRepository repo,
+            string serverName,
+            string connString)
+        {
+            var task = Task.Run(() => repo.Insert(payload));
+            if (await Task.WhenAny(task, Task.Delay(3000)) == task)
             {
-                EnqueueRetryItem(connString, serverName, payload, payloadType,
-                    ex.Message);
+                // 成功
+            }
+            else
+            {
+                EnqueueRetryItem(connString, serverName, payload, "MOM",
+                    "写入超时 (3s)");
             }
         }
 
@@ -530,7 +537,7 @@ namespace ZenergyBFSI.Service
                 TargetServerName = serverName,
                 Payload = payload,
                 PayloadType = payloadType,
-                RetryCount = 1,
+                RetryCount = 0,
                 FirstFailTime = now,
                 LastFailTime = now,
                 LastErrorMessage = errorMessage
@@ -564,12 +571,10 @@ namespace ZenergyBFSI.Service
                     continue; // 丢弃
                 }
 
-                item.RetryCount++;
                 item.LastFailTime = DateTime.Now;
 
                 try
                 {
-                    using var cts = new CancellationTokenSource(3000);
                     var task = Task.Run(() =>
                     {
                         if (item.PayloadType == "Detection")
@@ -582,18 +587,15 @@ namespace ZenergyBFSI.Service
                             var repo = new BlueFilmDataMOMRepository(item.TargetConnectionString);
                             repo.Insert((T_BlueFilmDataMOM)item.Payload);
                         }
-                    }, cts.Token);
+                    });
 
-                    if (task.Wait(3000, cts.Token))
+                    if (Task.WhenAny(task, Task.Delay(3000)).GetAwaiter().GetResult() == task)
                     {
+                        item.RetryCount++;
                         Rlog.Info($"[BlueFilmDataQueue] 重试成功 | 服务器: {item.TargetServerName} | 第{item.RetryCount}次");
                         continue;
                     }
 
-                    item.LastErrorMessage = "重试超时 (3s)";
-                }
-                catch (OperationCanceledException)
-                {
                     item.LastErrorMessage = "重试超时 (3s)";
                 }
                 catch (Exception ex)
