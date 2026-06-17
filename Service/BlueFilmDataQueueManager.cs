@@ -114,6 +114,14 @@ namespace ZenergyBFSI.Service
         {
             _disposed = true;
             _cts?.Cancel();
+
+            // Drain remaining read requests to avoid TCS leaks (awaiters would hang forever)
+            while (_readQueue.TryDequeue(out var orphan))
+            {
+                orphan.Completion.TrySetResult(
+                    new CellData { 电芯码 = orphan.CellCode ?? "", 出站结果 = "OK" });
+            }
+
             _retryTimer?.Dispose();
 
             try
@@ -318,7 +326,7 @@ namespace ZenergyBFSI.Service
         private void AggregateDefects(ref CellData data, List<T_BlueFilmDetection> records)
         {
             var areaGroups = records
-                .Where(t => t.DetectionResults != "OK"
+                .Where(t => !string.Equals(t.DetectionResults?.Trim(), "OK", StringComparison.OrdinalIgnoreCase)
                     && !string.IsNullOrEmpty(t.DetectionArea))
                 .GroupBy(t => t.DetectionArea.Trim());
 
@@ -346,7 +354,7 @@ namespace ZenergyBFSI.Service
 
                 if (defectCounts.Count == 0) continue;
 
-                var defectStr = string.Join(",", defectCounts.Select(kv => $"{kv.Key}×{kv.Value}"));
+                var defectStr = string.Join(",", defectCounts.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}×{kv.Value}"));
                 var ngValue = $"{areaGroup.Key}外观缺陷{defectStr}";
 
                 SetNgField(ref data, ngIndex, ngValue);
