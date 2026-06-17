@@ -172,6 +172,25 @@ namespace ZenergyBFSI.View
             set { Settings.SQLServer视觉密码 = value; RaisePropertyChanged(); }
         }
 
+        // ── SQL Server 三库连接字符串 ──
+        public string SQLServer本地连接
+        {
+            get => Settings.SQLServer本地连接;
+            set { Settings.SQLServer本地连接 = value; RaisePropertyChanged(); }
+        }
+
+        public string SQLServer远程连接1
+        {
+            get => Settings.SQLServer远程连接1;
+            set { Settings.SQLServer远程连接1 = value; RaisePropertyChanged(); }
+        }
+
+        public string SQLServer远程连接2
+        {
+            get => Settings.SQLServer远程连接2;
+            set { Settings.SQLServer远程连接2 = value; RaisePropertyChanged(); }
+        }
+
         // ── MOM 连接 ──
         public string MOM地址
         {
@@ -274,6 +293,9 @@ namespace ZenergyBFSI.View
                 RaisePropertyChanged("SQLServer视觉库名");
                 RaisePropertyChanged("SQLServer视觉用户");
                 RaisePropertyChanged("SQLServer视觉密码");
+                RaisePropertyChanged("SQLServer本地连接");
+                RaisePropertyChanged("SQLServer远程连接1");
+                RaisePropertyChanged("SQLServer远程连接2");
                 RaisePropertyChanged("MOM地址");
                 RaisePropertyChanged("MOM心跳间隔");
                 RaisePropertyChanged("MOM联机计数");

@@ -208,6 +208,41 @@
                             <TextBox Grid.Column="1" Text="{Binding SQLServer视觉密码}"
                                      Style="{StaticResource FieldInputStyle}"/>
                         </Grid>
+
+                        <Separator Margin="0,16" Background="#EEE"/>
+
+                        <TextBlock Text="三库连接字符串（异步数据底座）" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="#2962FF" Margin="0,0,0,10"/>
+
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="本地主库连接" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding SQLServer本地连接}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="远程库1 连接" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding SQLServer远程连接1}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
+
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="远程库2 连接" Style="{StaticResource FieldLabelStyle}"/>
+                            <TextBox Grid.Column="1" Text="{Binding SQLServer远程连接2}"
+                                     Style="{StaticResource FieldInputStyle}"/>
+                        </Grid>
                     </StackPanel>
                 </Border>
 
