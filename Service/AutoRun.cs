@@ -1703,8 +1703,17 @@ namespace ZenergyBFSI.Model
 
                     if (data != null)
                     {
-                        // 异步读取视觉检测结果 — 不阻塞自动机线程
-                        data = await BlueFilmDataQueueManager.I.EnqueueReadAsync(tempcode, _channelNo);
+                        // 异步读取视觉检测结果，5s 超时保护 — 绝不阻塞自动机线程
+                        var readTask = BlueFilmDataQueueManager.I.EnqueueReadAsync(tempcode, _channelNo);
+                        var timeoutTask = Task.Delay(5000);
+                        if (await Task.WhenAny(readTask, timeoutTask) == timeoutTask)
+                        {
+                            UC_Operation.I.WriteLog($"工位{_channelNo} 视觉数据读取超时(5s)，使用默认值", "Warn");
+                        }
+                        else
+                        {
+                            data = readTask.Result;
+                        }
 
                         int way = _owner.getlead(data);
 
