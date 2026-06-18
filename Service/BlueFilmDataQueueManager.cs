@@ -89,6 +89,49 @@ namespace ZenergyBFSI.Service
             _dbHealth[label] = healthy;
         }
 
+        /// <summary>
+        /// 主动探测三库连通性 — 实际 Open 连接测试，更新健康状态，返回结果文本
+        /// 可在断点处调用: BlueFilmDataQueueManager.I.PingAllDatabases()
+        /// </summary>
+        public string PingAllDatabases()
+        {
+            var results = new System.Text.StringBuilder();
+            results.AppendLine($"=== DB Ping {DateTime.Now:HH:mm:ss} ===");
+
+            PingSingle(@"DB1(DESKTOP-0F9L4KO\RJ)", Settings.SQLServer本地连接, results);
+            PingSingle("DB2(DESKTOP-NHDST87)", Settings.SQLServer远程连接1, results);
+            PingSingle("DB3(DESKTOP-2ADDTIC)", Settings.SQLServer远程连接2, results);
+
+            var summary = results.ToString();
+            Rlog.Info(summary);
+            return summary;
+        }
+
+        private void PingSingle(string label, string connString, System.Text.StringBuilder results)
+        {
+            try
+            {
+                using var conn = new System.Data.SqlClient.SqlConnection(connString);
+                var task = Task.Run(() => { conn.Open(); });
+                if (task.Wait(2000))
+                {
+                    conn.Close();
+                    _dbHealth[label] = true;
+                    results.AppendLine($"  {label} ✅ 在线");
+                }
+                else
+                {
+                    _dbHealth[label] = false;
+                    results.AppendLine($"  {label} ❌ 超时 (2s)");
+                }
+            }
+            catch (Exception ex)
+            {
+                _dbHealth[label] = false;
+                results.AppendLine($"  {label} ❌ {ex.Message}");
+            }
+        }
+
         #endregion
 
         #region 生命周期
