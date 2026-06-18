@@ -3,7 +3,6 @@ using RinKit;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -630,6 +629,7 @@ namespace ZenergyBFSI.Service
         /// </summary>
         private void RetryCallback()
         {
+            BlueFilmDataQueueManager.I.PingAllDatabases();
             if (_retryBuffer.IsEmpty) return;
 
             // 取出所有待重试项
