@@ -79,6 +79,11 @@ namespace ZenergyBFSI.Service
             = new ConcurrentDictionary<string, bool>();
 
         /// <summary>
+        /// DB 健康状态变化事件（PingAllDatabases 或消费者操作触发时通知 UI 立即刷新）
+        /// </summary>
+        public event Action DbHealthChanged;
+
+        /// <summary>
         /// 获取三库连接状态快照（线程安全，供状态栏 UI 轮询）
         /// </summary>
         public IReadOnlyDictionary<string, bool> GetDbHealth() =>
@@ -86,7 +91,10 @@ namespace ZenergyBFSI.Service
 
         private void SetDbHealthy(string label, bool healthy)
         {
+            var old = _dbHealth.TryGetValue(label, out var v) && v;
             _dbHealth[label] = healthy;
+            if (old != healthy)
+                DbHealthChanged?.Invoke();
         }
 
         /// <summary>
@@ -137,6 +145,7 @@ namespace ZenergyBFSI.Service
         #region 生命周期
 
         private volatile bool _initialized = false;
+        public bool IsInitialized => _initialized;
         private readonly object _initLock = new object();
         private volatile bool _disposed = false;
 

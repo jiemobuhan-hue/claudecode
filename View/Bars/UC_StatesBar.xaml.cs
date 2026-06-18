@@ -79,6 +79,12 @@ namespace ZenergyBFSI.View.Bars
             _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _pollTimer.Tick += OnPollTick;
             _pollTimer.Start();
+
+            // 订阅 DB 健康变化事件，立即刷新（不等 500ms 轮询）
+            BlueFilmDataQueueManager.I.DbHealthChanged += () =>
+            {
+                Application.Current?.Dispatcher?.Invoke(() => RefreshDbStatus());
+            };
         }
 
         // ---- PLC / MOM (existing, push pattern from AutoRun.DeviceLinkAsync) ----
@@ -345,17 +351,7 @@ namespace ZenergyBFSI.View.Bars
                 }
 
                 // 数据库连接状态
-                try
-                {
-                    var dbHealth = BlueFilmDataQueueManager.I.GetDbHealth();
-                    Db1Status = dbHealth.TryGetValue(@"DB1(DESKTOP-0F9L4KO\RJ)", out var db1) && db1
-                        ? Brushes.LimeGreen : Brushes.Red;
-                    Db2Status = dbHealth.TryGetValue("DB2(DESKTOP-NHDST87)", out var db2) && db2
-                        ? Brushes.LimeGreen : Brushes.Red;
-                    Db3Status = dbHealth.TryGetValue("DB3(DESKTOP-2ADDTIC)", out var db3) && db3
-                        ? Brushes.LimeGreen : Brushes.Red;
-                }
-                catch { /* QueueManager may not be initialized yet */ }
+                RefreshDbStatus();
 
                 CurrentTime = DateTime.Now;
             }
@@ -363,6 +359,28 @@ namespace ZenergyBFSI.View.Bars
             {
                 // AutoRun may not be initialized yet
             }
+        }
+
+        private void RefreshDbStatus()
+        {
+            try
+            {
+                if (!BlueFilmDataQueueManager.I.IsInitialized) return;
+
+                var dbHealth = BlueFilmDataQueueManager.I.GetDbHealth();
+                var db1 = dbHealth.TryGetValue(@"DB1(DESKTOP-0F9L4KO\RJ)", out var d1) && d1;
+                var db2 = dbHealth.TryGetValue("DB2(DESKTOP-NHDST87)", out var d2) && d2;
+                var db3 = dbHealth.TryGetValue("DB3(DESKTOP-2ADDTIC)", out var d3) && d3;
+
+                Db1Status = db1 ? Brushes.LimeGreen : Brushes.Red;
+                Db2Status = db2 ? Brushes.LimeGreen : Brushes.Red;
+                Db3Status = db3 ? Brushes.LimeGreen : Brushes.Red;
+
+                // 诊断日志：每次状态变化时输出当前值
+                System.Diagnostics.Debug.WriteLine(
+                    $"[DB Health] DB1={db1} DB2={db2} DB3={db3} | Keys: {string.Join(", ", dbHealth.Keys)}");
+            }
+            catch { /* QueueManager may not be initialized yet */ }
         }
     }
 }
