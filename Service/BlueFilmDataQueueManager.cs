@@ -148,6 +148,11 @@ namespace ZenergyBFSI.Service
                 var msg = ex.InnerException?.Message ?? ex.Message;
                 results.AppendLine($"  {label} ❌ {msg}");
             }
+            catch (Exception ex)
+            {
+                SetDbHealthy(label, false);
+                results.AppendLine($"  {label} ❌ {ex.Message}");
+            }
         }
 
         #endregion
