@@ -56,6 +56,7 @@ namespace ZenergyBFSI.Service
         private Task _writeDetectionConsumerTask;
         private Task _writeMOMConsumerTask;
         private Timer _retryTimer;
+        private Timer _healthCheckTimer;
 
         // 三库 Repository 实例（在 Init 时创建）
         private BlueFilmDetectionRepository _detectionRepoLocal;
@@ -109,8 +110,8 @@ namespace ZenergyBFSI.Service
             PingSingle("DB2(DESKTOP-NHDST87)", Settings.SQLServer远程连接1, results);
             PingSingle("DB3(DESKTOP-2ADDTIC)", Settings.SQLServer远程连接2, results);
 
+            // 只在状态变更时输出日志，避免每15s刷屏
             var summary = results.ToString();
-            Rlog.Info(summary);
             return summary;
         }
 
@@ -182,12 +183,7 @@ namespace ZenergyBFSI.Service
                 _momRepoRemote1 = new BlueFilmDataMOMRepository(connRemote1);
                 _momRepoRemote2 = new BlueFilmDataMOMRepository(connRemote2);
 
-                // 预设三库为在线（乐观假设，首次实际操作失败时变红）
-                _dbHealth[@"DB1(DESKTOP-0F9L4KO\RJ)"] = true;
-                _dbHealth["DB2(DESKTOP-NHDST87)"] = true;
-                _dbHealth["DB3(DESKTOP-2ADDTIC)"] = true;
-
-                // 启动后台消费者 (方法将在 Tasks 5-6 中实现)
+                // 启动后台消费者
                 _readConsumerTask = Task.Run(() => ReadConsumerLoop(_cts.Token), _cts.Token);
                 _writeDetectionConsumerTask = Task.Run(() => WriteDetectionConsumerLoop(_cts.Token), _cts.Token);
                 _writeMOMConsumerTask = Task.Run(() => WriteMOMConsumerLoop(_cts.Token), _cts.Token);
@@ -195,8 +191,11 @@ namespace ZenergyBFSI.Service
                 // 启动重试定时器（首延迟 30s，之后每 30s）
                 _retryTimer = new Timer(_ => RetryCallback(), null, 30000, 30000);
 
+                // 启动主动健康检查定时器（首延迟 5s，之后每 15s 探测三库连通性）
+                _healthCheckTimer = new Timer(_ => PingAllDatabases(), null, 5000, 15000);
+
                 _initialized = true;
-                Rlog.Info("[BlueFilmDataQueue] 队列管理器初始化完成，3 个后台消费者已启动");
+                Rlog.Info("[BlueFilmDataQueue] 队列管理器初始化完成，3 个后台消费者 + 健康检查已启动");
             }
         }
 
@@ -213,6 +212,7 @@ namespace ZenergyBFSI.Service
             }
 
             _retryTimer?.Dispose();
+            _healthCheckTimer?.Dispose();
 
             try
             {
