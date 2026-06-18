@@ -304,9 +304,8 @@ namespace ZenergyBFSI.Model
             {
                 UC_Operation.I.WriteLog("自动机初始化...", "Debug");
 
-                //初始化数据库脚本
-                //TODO
-                //在这里初始化所有的视觉工控机的SQLserver连接
+                //初始化数据库脚本 — 建索引 + 启动每日清理
+                InitDatabase();
                 BlueFilmDataQueueManager.I.Init();
                 var x = DashboardService.I;
                 //初始化工站数据
@@ -335,6 +334,55 @@ namespace ZenergyBFSI.Model
                 UC_Operation.I.WriteLog($"自动机初始化异常！{ex.Message}\r\n {ex.StackTrace}", "Error");
             }
             return false;
+        }
+
+        /// <summary>
+        /// 初始化本地 SQLite 数据库 — 建索引 + 启动每日清理
+        /// </summary>
+        private void InitDatabase()
+        {
+            try
+            {
+                // 给 CellData 进站时间建索引，查询提速
+                SQLiteGenericHelper.ExecuteNonQuery(
+                    "CREATE INDEX IF NOT EXISTS idx_CellData_进站时间 ON CellData(进站时间);");
+
+                // 立即清理一次，之后每天凌晨 2 点自动清理 30 天前的数据
+                CleanOldRecords();
+                var now = DateTime.Now;
+                var next2AM = new DateTime(now.Year, now.Month, now.Day, 2, 0, 0);
+                if (now >= next2AM) next2AM = next2AM.AddDays(1);
+                var msUntil2AM = (int)(next2AM - now).TotalMilliseconds;
+                var cleanupTimer = new System.Threading.Timer(
+                    _ => CleanOldRecords(), null, msUntil2AM, 86400000);
+
+                UC_Operation.I.WriteLog("本地数据库索引及每日清理已启动", "Info");
+            }
+            catch (Exception ex)
+            {
+                Rlog.Error($"数据库初始化异常: {ex.Message}");
+            }
+        }
+
+        private static void CleanOldRecords()
+        {
+            try
+            {
+                var cutoff = DateTime.Now.AddDays(-30).ToString("yyyy/MM/dd HH:mm:ss");
+                // 先查数量用于日志
+                var count = SQLiteGenericHelper.ExecuteScalar<long>(
+                    "SELECT COUNT(*) FROM CellData WHERE 进站时间 < @p0;", cutoff);
+                if (count > 0)
+                {
+                    SQLiteGenericHelper.ExecuteNonQuery(
+                        "DELETE FROM CellData WHERE 进站时间 < @p0;", cutoff);
+                    Rlog.Info($"[DB清理] 删除 {count} 条 {cutoff} 之前的旧记录");
+                }
+            }
+            catch (Exception ex)
+            {
+                Rlog.Error($"[DB清理] 异常: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -1675,17 +1723,17 @@ namespace ZenergyBFSI.Model
                         else
                         {
                             // 只合并缺陷字段，不替换整个 data（保留进站时间等原有字段）
-                            var result = readTask.Result;
-                            data.出站结果 = result.出站结果;
-                            data.Ng类型数量 = result.Ng类型数量;
-                            data.Ng类型1 = result.Ng类型1;
-                            data.Ng类型2 = result.Ng类型2;
-                            data.Ng类型3 = result.Ng类型3;
-                            data.Ng类型4 = result.Ng类型4;
-                            data.Ng类型5 = result.Ng类型5;
-                            data.Ng类型6 = result.Ng类型6;
-                            data.Ng类型7 = result.Ng类型7;
-                            data.Ng类型8 = result.Ng类型8;
+                            var results = readTask.Result;
+                            data.出站结果 = results.出站结果;
+                            data.Ng类型数量 = results.Ng类型数量;
+                            data.Ng类型1 = results.Ng类型1;
+                            data.Ng类型2 = results.Ng类型2;
+                            data.Ng类型3 = results.Ng类型3;
+                            data.Ng类型4 = results.Ng类型4;
+                            data.Ng类型5 = results.Ng类型5;
+                            data.Ng类型6 = results.Ng类型6;
+                            data.Ng类型7 = results.Ng类型7;
+                            data.Ng类型8 = results.Ng类型8;
                             // 标注已出站检测（看板 OutboundCondition 依赖此字段）
                             data.视觉检测参数一 = "已检测";
                             data.出站时间 = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss");
