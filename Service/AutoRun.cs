@@ -1675,7 +1675,21 @@ namespace ZenergyBFSI.Model
                         }
                         else
                         {
-                            data = readTask.Result;
+                            // 只合并缺陷字段，不替换整个 data（保留进站时间等原有字段）
+                            var result = readTask.Result;
+                            data.出站结果 = result.出站结果;
+                            data.Ng类型数量 = result.Ng类型数量;
+                            data.Ng类型1 = result.Ng类型1;
+                            data.Ng类型2 = result.Ng类型2;
+                            data.Ng类型3 = result.Ng类型3;
+                            data.Ng类型4 = result.Ng类型4;
+                            data.Ng类型5 = result.Ng类型5;
+                            data.Ng类型6 = result.Ng类型6;
+                            data.Ng类型7 = result.Ng类型7;
+                            data.Ng类型8 = result.Ng类型8;
+                            // 标注已出站检测（看板 OutboundCondition 依赖此字段）
+                            data.视觉检测参数一 = "已检测";
+                            data.出站时间 = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss");
                         }
 
                         int way = _owner.getlead(data);
