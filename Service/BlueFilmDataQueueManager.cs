@@ -121,6 +121,11 @@ namespace ZenergyBFSI.Service
                 _momRepoRemote1 = new BlueFilmDataMOMRepository(connRemote1);
                 _momRepoRemote2 = new BlueFilmDataMOMRepository(connRemote2);
 
+                // 预设三库为在线（乐观假设，首次实际操作失败时变红）
+                _dbHealth[@"DB1(DESKTOP-0F9L4KO\RJ)"] = true;
+                _dbHealth["DB2(DESKTOP-NHDST87)"] = true;
+                _dbHealth["DB3(DESKTOP-2ADDTIC)"] = true;
+
                 // 启动后台消费者 (方法将在 Tasks 5-6 中实现)
                 _readConsumerTask = Task.Run(() => ReadConsumerLoop(_cts.Token), _cts.Token);
                 _writeDetectionConsumerTask = Task.Run(() => WriteDetectionConsumerLoop(_cts.Token), _cts.Token);
