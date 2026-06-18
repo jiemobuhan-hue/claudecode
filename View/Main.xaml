@@ -45,7 +45,7 @@
             </dx:DXTabItem>
 
             <dx:DXTabItem x:Name="it_setting" Header="参数设置" ToolTip="参数设置" Glyph="{dx:DXImage SvgImages/Spreadsheet/CalculationOptions.svg}">
-                <view:UC_Setting x:Name="uc_settings"/>
+                <view:UC_Setting x:Name="uc_settings" />
             </dx:DXTabItem>
             <dx:DXTabItem x:Name="it_user" Header="用户管理" ToolTip="用户管理" Glyph="{dx:DXImage DevAV/Actions/NewItem_32x32.png}">
 

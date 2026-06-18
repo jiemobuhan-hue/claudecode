@@ -1599,44 +1599,7 @@ namespace ZenergyBFSI.Model
             }
 
             public async Task<bool> WaitForSignalAsync(CancellationToken token)
-            {
-                //var trigger = await _owner.GetInt_Plc($"PLC通道{_channelNo}分流触发");
-                //if (trigger <= 0) { _state.Processing = false; return false; }
-                //if (trigger == _state.TriggerLast) return false;
-                //_state.TriggerLast = trigger;
-
-                //// 状态锁存：防止重复执行
-                //if (_state.Processing) return false;
-                //_state.Processing = true;
-
-                //return true;
-                #region 旧代码
-                //var trigger = await _owner.GetInt_Plc($"PLC通道{_channelNo}分流触发");
-
-                //               if (trigger <= 0)
-                //               {
-                //                   _state.Processing = false;
-                //                   await _owner.SetInt_Plc($"PLC通道{_channelNo}分流NG状态", 0);
-                //                   await _owner.SetInt_Plc($"PLC通道{_channelNo}分流出站结果", 0);
-                //                   this._state.TriggerLast = trigger;
-                //                   return false;
-                //               }
-
-                //               //if (trigger == _state.TriggerLast)
-                //               //{
-                //               //    _state.TriggerLast = trigger;
-                //               //    return false;
-                //               //}
-
-
-                //               _state.TriggerLast = trigger;
-
-                //               // 状态锁存：防止重复执行
-                //               if (_state.Processing) return false;
-                //               _state.Processing = true;
-
-                //               return trigger == 1;
-                #endregion
+            { 
                 var trigger = await _owner.GetInt_Plc($"PLC通道{_channelNo}分流触发");
 
                 // 1. 无效信号（0或负）：重置处理标志，清空PLC结果
@@ -1738,18 +1701,6 @@ namespace ZenergyBFSI.Model
 
                         var temp = new List<CellData> { data };
                         SQLiteGenericHelper.BulkUpsert<CellData>(temp, "电芯码", "CellData");
-
-                        // 构建 MOM 出站数据并入队（非阻塞）
-                        var momData = new ZenergyBFSI.Model.Vision.T_BlueFilmDataMOM
-                        {
-                            CellCode = data.电芯码,
-                            SideCellType = Settings.电芯型号,
-                            CreateTime = DateTime.Now,
-                            ParamterCode = "OutboundResult",
-                            ParameterResult = data.出站结果,
-                            Value = data.视觉检测结果
-                        };
-                        BlueFilmDataQueueManager.I.EnqueueMOMOutbound(momData);
 
                         _state.LastCode = tempcode;
                         _state.LastProcessTime = DateTime.Now.Ticks;

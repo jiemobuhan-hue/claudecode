@@ -59,7 +59,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid>
+    <Grid  >
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="180"/>
             <ColumnDefinition Width="*"/>
@@ -79,7 +79,7 @@
         </Border>
 
         <!-- 右侧内容 -->
-        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" VerticalAlignment="Stretch">
             <StackPanel Margin="30,15,30,40" MaxWidth="800">
 
                 <!-- ═══ 系统运行 ═══ -->

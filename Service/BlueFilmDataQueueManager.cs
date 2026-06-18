@@ -1,4 +1,3 @@
-using Newtonsoft.Json;
 using RinKit;
 using System;
 using System.Collections.Concurrent;
@@ -7,18 +6,15 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ZenergyBFSI.Model;
-using ZenergyBFSI.Model.Vision;
 using ZenergyBFSI.Service.CRUDServices;
 
 namespace ZenergyBFSI.Service
 {
     /// <summary>
-    /// 蓝膜数据异步队列管理器 — 单例
-    /// 将 SQL Server 读写从自动机线程彻底解耦
+    /// 蓝膜数据异步读取管理器 — 单例
+    /// 上位机只负责从 3 台视觉工控机 SQL Server 读取检测数据，绝不做写入
     ///
     /// 读路径: EnqueueReadAsync → _readQueue → ReadConsumer → 3库查询 → TCS.SetResult → 自动机 await 恢复
-    /// 写路径: EnqueueDetectionResult/EnqueueMOMOutbound → _writeQueue → WriteConsumer → WriteRouter(本地→远程1→远程2)
-    /// 容灾:  远程写入失败 → _retryBuffer → RetryTimer 30s → 最多 10 次 → 丢弃
     /// </summary>
     public sealed class BlueFilmDataQueueManager : IDisposable
     {
@@ -35,17 +31,7 @@ namespace ZenergyBFSI.Service
 
         #region 队列
 
-        // 读取请求队列：自动机 Enqueue → 后台消费者 Dequeue → 查 3 库 → TCS 回调
         private readonly ConcurrentQueue<DataReadRequest> _readQueue = new ConcurrentQueue<DataReadRequest>();
-
-        // 检测结果写入队列（T_BlueFilmDetection）
-        private readonly ConcurrentQueue<T_BlueFilmDetection> _writeDetectionQueue = new ConcurrentQueue<T_BlueFilmDetection>();
-
-        // MOM 出站写入队列（T_BlueFilmDataMOM）
-        private readonly ConcurrentQueue<T_BlueFilmDataMOM> _writeMOMQueue = new ConcurrentQueue<T_BlueFilmDataMOM>();
-
-        // 远程库写入失败重试缓冲区
-        private readonly ConcurrentQueue<DataRetryItem> _retryBuffer = new ConcurrentQueue<DataRetryItem>();
 
         #endregion
 
@@ -53,39 +39,21 @@ namespace ZenergyBFSI.Service
 
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
         private Task _readConsumerTask;
-        private Task _writeDetectionConsumerTask;
-        private Task _writeMOMConsumerTask;
-        private Timer _retryTimer;
         private Timer _healthCheckTimer;
 
-        // 三库 Repository 实例（在 Init 时创建）
-        private BlueFilmDetectionRepository _detectionRepoLocal;
-        private BlueFilmDetectionRepository _detectionRepoRemote1;
-        private BlueFilmDetectionRepository _detectionRepoRemote2;
-
-        private BlueFilmDataMOMRepository _momRepoLocal;
-        private BlueFilmDataMOMRepository _momRepoRemote1;
-        private BlueFilmDataMOMRepository _momRepoRemote2;
+        private BlueFilmDetectionRepository _detectionRepo1;
+        private BlueFilmDetectionRepository _detectionRepo2;
+        private BlueFilmDetectionRepository _detectionRepo3;
 
         #endregion
 
-        #region 数据库连接状态（供状态栏轮询）
+        #region 数据库连接状态
 
-        /// <summary>
-        /// 三库连接状态字典 — 键: 服务器标签, 值: 是否在线
-        /// 由消费者线程更新，UI 线程通过 GetDbHealth() 读取
-        /// </summary>
         private readonly ConcurrentDictionary<string, bool> _dbHealth
             = new ConcurrentDictionary<string, bool>();
 
-        /// <summary>
-        /// DB 健康状态变化事件（PingAllDatabases 或消费者操作触发时通知 UI 立即刷新）
-        /// </summary>
         public event Action DbHealthChanged;
 
-        /// <summary>
-        /// 获取三库连接状态快照（线程安全，供状态栏 UI 轮询）
-        /// </summary>
         public IReadOnlyDictionary<string, bool> GetDbHealth() =>
             new Dictionary<string, bool>(_dbHealth);
 
@@ -97,10 +65,6 @@ namespace ZenergyBFSI.Service
                 DbHealthChanged?.Invoke();
         }
 
-        /// <summary>
-        /// 主动探测三库连通性 — 实际 Open 连接测试，更新健康状态，返回结果文本
-        /// 可在断点处调用: BlueFilmDataQueueManager.I.PingAllDatabases()
-        /// </summary>
         public string PingAllDatabases()
         {
             var results = new System.Text.StringBuilder();
@@ -110,9 +74,7 @@ namespace ZenergyBFSI.Service
             PingSingle("DB2(DESKTOP-NHDST87)", Settings.SQLServer远程连接1, results);
             PingSingle("DB3(DESKTOP-2ADDTIC)", Settings.SQLServer远程连接2, results);
 
-            // 只在状态变更时输出日志，避免每15s刷屏
-            var summary = results.ToString();
-            return summary;
+            return results.ToString();
         }
 
         private void PingSingle(string label, string connString, System.Text.StringBuilder results)
@@ -121,30 +83,26 @@ namespace ZenergyBFSI.Service
             {
                 using var conn = new System.Data.SqlClient.SqlConnection(connString);
                 var task = Task.Run(() => { conn.Open(); });
-
-                // 等待2秒，如果超时则主动抛出一个 TimeoutException
                 if (!task.Wait(2000))
                 {
-                    // 超时 —— 直接抛出异常，让外层 catch 统一处理
                     throw new TimeoutException($"连接超时 (2s)");
                 }
-
-                // 如果 task 完成，检查是否有内部异常
                 if (task.IsFaulted)
                 {
-                    // 有异常 —— 将内部异常抛出，让外层 catch 捕获
                     var inner = task.Exception?.InnerException;
                     throw inner ?? new Exception("Unknown error");
                 }
-
-                // 一切正常
                 conn.Close();
                 SetDbHealthy(label, true);
                 results.AppendLine($"  {label} ✅ 在线");
             }
+            catch (AggregateException ex)
+            {
+                SetDbHealthy(label, false);
+                results.AppendLine($"  {label} ❌ {ex.InnerException?.Message ?? ex.Message}");
+            }
             catch (Exception ex)
             {
-                // 现在所有异常（包括超时、连接失败、甚至 AggregateException）都会汇聚到这里
                 SetDbHealthy(label, false);
                 results.AppendLine($"  {label} ❌ {ex.Message}");
             }
@@ -159,10 +117,6 @@ namespace ZenergyBFSI.Service
         private readonly object _initLock = new object();
         private volatile bool _disposed = false;
 
-        /// <summary>
-        /// 初始化队列管理器 — 创建 3 组 Repository + 启动 3 个后台消费者 + 重试定时器
-        /// 由 AutoRun.Init() 或 App 启动时调用
-        /// </summary>
         public void Init()
         {
             if (_initialized) return;
@@ -170,32 +124,16 @@ namespace ZenergyBFSI.Service
             {
                 if (_initialized) return;
 
-                var connLocal = Settings.SQLServer本地连接;
-                var connRemote1 = Settings.SQLServer远程连接1;
-                var connRemote2 = Settings.SQLServer远程连接2;
+                _detectionRepo1 = new BlueFilmDetectionRepository(Settings.SQLServer本地连接);
+                _detectionRepo2 = new BlueFilmDetectionRepository(Settings.SQLServer远程连接1);
+                _detectionRepo3 = new BlueFilmDetectionRepository(Settings.SQLServer远程连接2);
 
-                // 创建三库 Repository
-                _detectionRepoLocal  = new BlueFilmDetectionRepository(connLocal);
-                _detectionRepoRemote1 = new BlueFilmDetectionRepository(connRemote1);
-                _detectionRepoRemote2 = new BlueFilmDetectionRepository(connRemote2);
-
-                _momRepoLocal  = new BlueFilmDataMOMRepository(connLocal);
-                _momRepoRemote1 = new BlueFilmDataMOMRepository(connRemote1);
-                _momRepoRemote2 = new BlueFilmDataMOMRepository(connRemote2);
-
-                // 启动后台消费者
                 _readConsumerTask = Task.Run(() => ReadConsumerLoop(_cts.Token), _cts.Token);
-                _writeDetectionConsumerTask = Task.Run(() => WriteDetectionConsumerLoop(_cts.Token), _cts.Token);
-                _writeMOMConsumerTask = Task.Run(() => WriteMOMConsumerLoop(_cts.Token), _cts.Token);
 
-                // 启动重试定时器（首延迟 30s，之后每 30s）
-                _retryTimer = new Timer(_ => RetryCallback(), null, 30000, 30000);
-
-                // 启动主动健康检查定时器（首延迟 5s，之后每 15s 探测三库连通性）
                 _healthCheckTimer = new Timer(_ => PingAllDatabases(), null, 5000, 15000);
 
                 _initialized = true;
-                Rlog.Info("[BlueFilmDataQueue] 队列管理器初始化完成，3 个后台消费者 + 健康检查已启动");
+                Rlog.Info("[BlueFilmDataQueue] 队列管理器初始化完成，只读消费者 + 健康检查已启动");
             }
         }
 
@@ -203,43 +141,32 @@ namespace ZenergyBFSI.Service
         {
             _disposed = true;
             _cts?.Cancel();
+            _healthCheckTimer?.Dispose();
 
-            // Drain remaining read requests to avoid TCS leaks (awaiters would hang forever)
             while (_readQueue.TryDequeue(out var orphan))
             {
                 orphan.Completion.TrySetResult(
                     new CellData { 电芯码 = orphan.CellCode ?? "", 出站结果 = "OK" });
             }
 
-            _retryTimer?.Dispose();
-            _healthCheckTimer?.Dispose();
-
             try
             {
-                // 等待消费完成（最多 5 秒）
-                var tasks = new[] { _readConsumerTask, _writeDetectionConsumerTask, _writeMOMConsumerTask };
-                Task.WaitAll(tasks, 5000);
+                Task.WaitAll(new[] { _readConsumerTask }, 5000);
             }
-            catch (AggregateException) { /* 超时不阻塞 Dispose */ }
+            catch { }
 
             _cts?.Dispose();
         }
 
         #endregion
 
-        #region 公开 API（自动机调用）
+        #region 公开 API
 
-        /// <summary>
-        /// 异步读取视觉检测结果 — 返回 Task<CellData>，自动机线程通过 await 等待
-        /// 内部: 入队 → 后台查 3 库 → 聚合 → TCS.SetResult → 自动机恢复
-        /// 耗时: <1ms（仅入队操作）
-        /// </summary>
-        /// <param name="cellCode">电芯条码</param>
-        /// <param name="channelNo">通道编号 (1-4)</param>
-        /// <returns>聚合后的 CellData（含 Ng类型1~8 缺陷描述）</returns>
         public Task<CellData> EnqueueReadAsync(string cellCode, int channelNo)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(BlueFilmDataQueueManager));
+            if (_disposed)
+                return Task.FromResult(new CellData { 电芯码 = cellCode ?? "", 出站结果 = "OK" });
+
             var tcs = new TaskCompletionSource<CellData>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -254,55 +181,10 @@ namespace ZenergyBFSI.Service
             return tcs.Task;
         }
 
-        /// <summary>
-        /// 非阻塞入队 — 检测结果写入三库（本地优先，远程容错）
-        /// 耗时: <1ms（仅入队操作）
-        /// </summary>
-        public void EnqueueDetectionResult(T_BlueFilmDetection data)
-        {
-            if (_disposed) { Rlog.Warn("[BlueFilmDataQueue] 队列已释放，丢弃检测结果写入"); return; }
-            if (data != null)
-                _writeDetectionQueue.Enqueue(data);
-        }
-
-        /// <summary>
-        /// 非阻塞入队 — MOM 出站数据写入三库
-        /// 耗时: <1ms（仅入队操作）
-        /// </summary>
-        public void EnqueueMOMOutbound(T_BlueFilmDataMOM data)
-        {
-            if (_disposed) { Rlog.Warn("[BlueFilmDataQueue] 队列已释放，丢弃MOM出站写入"); return; }
-            if (data != null)
-                _writeMOMQueue.Enqueue(data);
-        }
-
-        /// <summary>
-        /// 批量入队检测结果
-        /// </summary>
-        public void EnqueueDetectionResultBatch(IEnumerable<T_BlueFilmDetection> dataList)
-        {
-            if (_disposed) { Rlog.Warn("[BlueFilmDataQueue] 队列已释放，丢弃批量检测结果写入"); return; }
-            if (dataList == null) return;
-            foreach (var data in dataList)
-                if (data != null)
-                    _writeDetectionQueue.Enqueue(data);
-        }
-
         #endregion
 
-        // ═══════════════════════════════════════════════════════════
-        // 以下区域将在 Tasks 5-6 中添加：
-        //   #region ReadConsumer   → Task 5
-        //   #region WriteConsumer  → Task 6
-        //   #region RetryTimer     → Task 6
-        // ═══════════════════════════════════════════════════════════
+        #region ReadConsumer
 
-        #region ReadConsumer — 异步读取三库视觉检测结果
-
-        /// <summary>
-        /// 读取消费者循环 — 从 _readQueue 取请求，查 3 库，聚合结果，通过 TCS 唤醒自动机
-        /// 空闲时 10ms 休眠避免 CPU 空转
-        /// </summary>
         private async Task ReadConsumerLoop(CancellationToken token)
         {
             while (!token.IsCancellationRequested)
@@ -313,8 +195,7 @@ namespace ZenergyBFSI.Service
                     try
                     {
                         result = await ProcessReadRequestAsync(request);
-                        // 10s 整体超时保护
-                        if ((DateTime.Now - request.EnqueueTime).TotalSeconds > 10)
+                        if ((DateTime.Now - request.EnqueueTime).TotalSeconds > 5)
                             result = new CellData { 电芯码 = request.CellCode, 出站结果 = "OK" };
                     }
                     catch (Exception ex)
@@ -323,7 +204,6 @@ namespace ZenergyBFSI.Service
                     }
                     finally
                     {
-                        // 确保不泄漏 TCS
                         request.Completion.TrySetResult(
                             result ?? new CellData { 电芯码 = request.CellCode, 出站结果 = "OK" });
                     }
@@ -335,9 +215,6 @@ namespace ZenergyBFSI.Service
             }
         }
 
-        /// <summary>
-        /// 处理单个读取请求 — 查本地 + 2 远程库，聚合 NG 缺陷
-        /// </summary>
         private async Task<CellData> ProcessReadRequestAsync(DataReadRequest request)
         {
             var allRecords = new List<T_BlueFilmDetection>();
@@ -348,40 +225,17 @@ namespace ZenergyBFSI.Service
                 Ng类型数量 = 0
             };
 
-            // 1. DB1 查询（3s 超时，三库全部远程同一策略）
-            await QuerySingleDbAsync(
-                _detectionRepoLocal,
-                @"DB1(DESKTOP-0F9L4KO\RJ)",
-                request.CellCode,
-                allRecords,
-                timeoutMs: 3000);
+            // 三库查询，每个 3s 超时，独立异常隔离
+            await QuerySingleDbAsync(_detectionRepo1, @"DB1(DESKTOP-0F9L4KO\RJ)", request.CellCode, allRecords, 3000);
+            await QuerySingleDbAsync(_detectionRepo2, "DB2(DESKTOP-NHDST87)", request.CellCode, allRecords, 3000);
+            await QuerySingleDbAsync(_detectionRepo3, "DB3(DESKTOP-2ADDTIC)", request.CellCode, allRecords, 3000);
 
-            // 2. DB2 查询（3s 超时，独立异常隔离）
-            await QuerySingleDbAsync(
-                _detectionRepoRemote1,
-                "DB2(DESKTOP-NHDST87)",
-                request.CellCode,
-                allRecords,
-                timeoutMs: 3000);
-
-            // 3. DB3 查询（3s 超时，独立异常隔离）
-            await QuerySingleDbAsync(
-                _detectionRepoRemote2,
-                "DB3(DESKTOP-2ADDTIC)",
-                request.CellCode,
-                allRecords,
-                timeoutMs: 3000);
-
-            // 聚合 NG 缺陷到 CellData
             if (allRecords.Count > 0)
                 AggregateDefects(ref result, allRecords);
 
             return result;
         }
 
-        /// <summary>
-        /// 查询单个数据库 — 超时隔离，异常不抛出
-        /// </summary>
         private async Task QuerySingleDbAsync(
             BlueFilmDetectionRepository repo,
             string serverLabel,
@@ -403,29 +257,25 @@ namespace ZenergyBFSI.Service
             catch (OperationCanceledException)
             {
                 SetDbHealthy(serverLabel, false);
-                Rlog.Warn($"[BlueFilmDataQueue] 查询超时 | 服务器: {serverLabel} | 电芯码: {cellCode} | 超时: {timeoutMs}ms");
+                Rlog.Warn($"[BlueFilmDataQueue] 查询超时 | 服务器: {serverLabel} | 电芯码: {cellCode}");
             }
             catch (AggregateException ex) when (ex.InnerException != null)
             {
                 SetDbHealthy(serverLabel, false);
-                Rlog.Error($"[BlueFilmDataQueue] 查询失败 | 服务器: {serverLabel} | 电芯码: {cellCode} | 异常: {ex.InnerException.Message}");
+                Rlog.Error($"[BlueFilmDataQueue] 查询失败 | 服务器: {serverLabel} | {ex.InnerException.Message}");
             }
             catch (System.Data.SqlClient.SqlException ex)
             {
                 SetDbHealthy(serverLabel, false);
-                Rlog.Error($"[BlueFilmDataQueue] SQL错误 | 服务器: {serverLabel} | 电芯码: {cellCode} | 错误号: {ex.Number} | {ex.Message}");
+                Rlog.Error($"[BlueFilmDataQueue] SQL错误 | 服务器: {serverLabel} | 错误号: {ex.Number} | {ex.Message}");
             }
             catch (Exception ex)
             {
                 SetDbHealthy(serverLabel, false);
-                Rlog.Error($"[BlueFilmDataQueue] 查询失败 | 服务器: {serverLabel} | 电芯码: {cellCode} | 异常: {ex.Message}");
+                Rlog.Error($"[BlueFilmDataQueue] 查询异常 | 服务器: {serverLabel} | {ex.Message}");
             }
         }
 
-        /// <summary>
-        /// 聚合 NG 缺陷 — 按 DetectionArea 分组，去重计数，填入 CellData.Ng类型1~8
-        /// 逻辑与 AutoRun.UpdateCellDataFromSQLserver 一致
-        /// </summary>
         private void AggregateDefects(ref CellData data, List<T_BlueFilmDetection> records)
         {
             var areaGroups = records
@@ -434,7 +284,6 @@ namespace ZenergyBFSI.Service
                 .GroupBy(t => t.DetectionArea.Trim());
 
             int ngIndex = 0;
-
             foreach (var areaGroup in areaGroups)
             {
                 if (ngIndex >= 8) break;
@@ -480,253 +329,6 @@ namespace ZenergyBFSI.Service
                 case 5: data.Ng类型6 = value; break;
                 case 6: data.Ng类型7 = value; break;
                 case 7: data.Ng类型8 = value; break;
-            }
-        }
-
-        #endregion
-
-        #region WriteConsumer — 三库写入（本地优先，远程容错 3s 超时）
-
-        /// <summary>
-        /// 检测结果写入消费者
-        /// </summary>
-        private async Task WriteDetectionConsumerLoop(CancellationToken token)
-        {
-            while (!token.IsCancellationRequested)
-            {
-                if (_writeDetectionQueue.TryDequeue(out var data))
-                {
-                    try { await WriteDetectionToAllDbsAsync(data); }
-                    catch (Exception ex) { Rlog.Error($"[BlueFilmDataQueue] WriteDetectionConsumer 异常: {ex.Message}"); }
-                }
-                else
-                {
-                    await Task.Delay(10, token);
-                }
-            }
-        }
-
-        /// <summary>
-        /// MOM 出站写入消费者
-        /// </summary>
-        private async Task WriteMOMConsumerLoop(CancellationToken token)
-        {
-            while (!token.IsCancellationRequested)
-            {
-                if (_writeMOMQueue.TryDequeue(out var data))
-                {
-                    try { await WriteMOMToAllDbsAsync(data); }
-                    catch (Exception ex) { Rlog.Error($"[BlueFilmDataQueue] WriteMOMConsumer 异常: {ex.Message}"); }
-                }
-                else
-                {
-                    await Task.Delay(10, token);
-                }
-            }
-        }
-
-        /// <summary>
-        /// WriteRouter — Detection 写入三库（全部远程，3s 超时 + 重试）
-        /// </summary>
-        private async Task WriteDetectionToAllDbsAsync(T_BlueFilmDetection data)
-        {
-            // DB1 (DESKTOP-0F9L4KO\RJ) — 3s 超时，失败入重试队列
-            await WriteDetectionToRemoteWithTimeoutAsync(
-                data, _detectionRepoLocal,
-                @"DB1(DESKTOP-0F9L4KO\RJ)",
-                Settings.SQLServer本地连接);
-
-            // DB2 (DESKTOP-NHDST87) — 3s 超时，失败入重试队列
-            await WriteDetectionToRemoteWithTimeoutAsync(
-                data, _detectionRepoRemote1,
-                "DB2(DESKTOP-NHDST87)",
-                Settings.SQLServer远程连接1);
-
-            // DB3 (DESKTOP-2ADDTIC) — 3s 超时，失败入重试队列
-            await WriteDetectionToRemoteWithTimeoutAsync(
-                data, _detectionRepoRemote2,
-                "DB3(DESKTOP-2ADDTIC)",
-                Settings.SQLServer远程连接2);
-        }
-
-        /// <summary>
-        /// WriteRouter — MOM 出站写入三库（全部远程，3s 超时 + 重试）
-        /// </summary>
-        private async Task WriteMOMToAllDbsAsync(T_BlueFilmDataMOM data)
-        {
-            // DB1 (DESKTOP-0F9L4KO\RJ)
-            await WriteMOMToRemoteWithTimeoutAsync(
-                data, _momRepoLocal,
-                @"DB1(DESKTOP-0F9L4KO\RJ)",
-                Settings.SQLServer本地连接);
-
-            // DB2 (DESKTOP-NHDST87)
-            await WriteMOMToRemoteWithTimeoutAsync(
-                data, _momRepoRemote1,
-                "DB2(DESKTOP-NHDST87)",
-                Settings.SQLServer远程连接1);
-
-            // DB3 (DESKTOP-2ADDTIC)
-            await WriteMOMToRemoteWithTimeoutAsync(
-                data, _momRepoRemote2,
-                "DB3(DESKTOP-2ADDTIC)",
-                Settings.SQLServer远程连接2);
-        }
-
-        /// <summary>
-        /// 远程库 Detection 写入 — 3s 超时，失败入重试缓冲区
-        /// </summary>
-        private async Task WriteDetectionToRemoteWithTimeoutAsync(
-            T_BlueFilmDetection payload,
-            BlueFilmDetectionRepository repo,
-            string serverName,
-            string connString)
-        {
-            var task = Task.Run(() => repo.Insert(payload));
-            if (await Task.WhenAny(task, Task.Delay(3000)) == task)
-            {
-                if (task.IsFaulted)
-                {
-                    var inner = task.Exception?.InnerException;
-                    SetDbHealthy(serverName, false);
-                    EnqueueRetryItem(connString, serverName, payload, "Detection",
-                        inner?.Message ?? "写入异常");
-                }
-                else
-                {
-                    SetDbHealthy(serverName, true);
-                }
-            }
-            else
-            {
-                SetDbHealthy(serverName, false);
-                EnqueueRetryItem(connString, serverName, payload, "Detection",
-                    "写入超时 (3s)");
-            }
-        }
-
-        /// <summary>
-        /// 远程库 MOM 写入 — 3s 超时，失败入重试缓冲区
-        /// </summary>
-        private async Task WriteMOMToRemoteWithTimeoutAsync(
-            T_BlueFilmDataMOM payload,
-            BlueFilmDataMOMRepository repo,
-            string serverName,
-            string connString)
-        {
-            var task = Task.Run(() => repo.Insert(payload));
-            if (await Task.WhenAny(task, Task.Delay(3000)) == task)
-            {
-                if (task.IsFaulted)
-                {
-                    var inner = task.Exception?.InnerException;
-                    SetDbHealthy(serverName, false);
-                    EnqueueRetryItem(connString, serverName, payload, "MOM",
-                        inner?.Message ?? "写入异常");
-                }
-                else
-                {
-                    SetDbHealthy(serverName, true);
-                }
-            }
-            else
-            {
-                SetDbHealthy(serverName, false);
-                EnqueueRetryItem(connString, serverName, payload, "MOM",
-                    "写入超时 (3s)");
-            }
-        }
-
-        /// <summary>
-        /// 将失败记录入重试缓冲区
-        /// </summary>
-        private void EnqueueRetryItem(string connString, string serverName,
-            object payload, string payloadType, string errorMessage)
-        {
-            var now = DateTime.Now;
-            _retryBuffer.Enqueue(new DataRetryItem
-            {
-                TargetConnectionString = connString,
-                TargetServerName = serverName,
-                Payload = payload,
-                PayloadType = payloadType,
-                RetryCount = 0,
-                FirstFailTime = now,
-                LastFailTime = now,
-                LastErrorMessage = errorMessage
-            });
-
-            Rlog.Error($"[BlueFilmDataQueue] 远程库写入失败 | 服务器: {serverName} | 类型: {payloadType} | 异常: {errorMessage} | 时间: {now:yyyy-MM-dd HH:mm:ss}");
-        }
-
-        #endregion
-
-        #region RetryTimer — 30s 周期重试补录
-
-        /// <summary>
-        /// 重试定时器回调 — 遍历 _retryBuffer，
-        /// 成功移除，失败重新入队，超过 10 次标记 Failed 丢弃
-        /// </summary>
-        private void RetryCallback()
-        {
-            if (_retryBuffer.IsEmpty) return;
-
-            var items = new List<DataRetryItem>();
-            while (_retryBuffer.TryDequeue(out var item))
-                items.Add(item);
-
-            foreach (var item in items)
-            {
-                if (item.RetryCount >= 10)
-                {
-                    Rlog.Error($"[BlueFilmDataQueue] 重试次数耗尽 | 服务器: {item.TargetServerName} | 首次失败: {item.FirstFailTime:yyyy-MM-dd HH:mm:ss} | 数据: {JsonConvert.SerializeObject(item.Payload)}");
-                    continue;
-                }
-
-                item.LastFailTime = DateTime.Now;
-
-                try
-                {
-                    var task = Task.Run(() =>
-                    {
-                        if (item.PayloadType == "Detection")
-                        {
-                            var repo = new BlueFilmDetectionRepository(item.TargetConnectionString);
-                            repo.Insert((T_BlueFilmDetection)item.Payload);
-                        }
-                        else if (item.PayloadType == "MOM")
-                        {
-                            var repo = new BlueFilmDataMOMRepository(item.TargetConnectionString);
-                            repo.Insert((T_BlueFilmDataMOM)item.Payload);
-                        }
-                    });
-
-                    if (Task.WhenAny(task, Task.Delay(3000)).GetAwaiter().GetResult() == task)
-                    {
-                        if (task.IsFaulted)
-                        {
-                            var inner = task.Exception?.InnerException;
-                            item.LastErrorMessage = inner?.Message ?? "重试异常";
-                        }
-                        else
-                        {
-                            item.RetryCount++;
-                            SetDbHealthy(item.TargetServerName, true);
-                            Rlog.Info($"[BlueFilmDataQueue] 重试成功 | 服务器: {item.TargetServerName} | 第{item.RetryCount}次");
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        item.LastErrorMessage = "重试超时 (3s)";
-                    }
-                }
-                catch (Exception ex)
-                {
-                    item.LastErrorMessage = ex.Message;
-                }
-
-                _retryBuffer.Enqueue(item);
             }
         }
 

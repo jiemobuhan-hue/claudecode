@@ -88,10 +88,10 @@
             </Setter>
         </Style>
     </UserControl.Resources>
-    <Grid>
+    <Grid VerticalAlignment="Stretch">
         <Grid.RowDefinitions>
             <RowDefinition Height="auto"/>
-            <RowDefinition Height="580"/>
+            <RowDefinition Height="880"/>
             <RowDefinition Height="20"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
@@ -112,27 +112,6 @@
 
             <StateCards:UC_SettingsPages x:Name="SettingPages" HorizontalAlignment="Stretch"  VerticalAlignment="Stretch" />
 
-        </Grid>
-        <!--<TextBlock Grid.Row="2" Text="MOM参数:" Margin="5,0,0,0" FontWeight="Bold"/>
-        <dxg:GridControl x:Name="gridControl" Grid.Row="3" >
-            <dxg:GridControl.View>
-                <dxg:TableView x:Name="gridView" AllowPerPixelScrolling="True" AutoWidth="True" AllowMoveColumnToDropArea="False" AllowScrollingOnDrag="False" AllowEditing="True">
-                    <dxg:TableView.RuntimeLocalizationStrings>
-                        <dxg:GridRuntimeStringCollection>
-                            <dxg:RuntimeStringIdInfo Id="GridGroupPanelText" Value=" "/>
-                        </dxg:GridRuntimeStringCollection>
-                    </dxg:TableView.RuntimeLocalizationStrings>
-                </dxg:TableView>
-            </dxg:GridControl.View>
-            <dxg:GridColumn FieldName="ParameterCode" Header="参数代码" Width="200"/>
-            <dxg:GridColumn FieldName="ParameterType" Header="参数类型" Width="50"/>
-            <dxg:GridColumn FieldName="Description" Header="描述" Width="300"/>
-            <dxg:GridColumn FieldName="TargetValue" Header="目标值" Width="100"/>
-            <dxg:GridColumn FieldName="UpperSpecificationsLimit" Header="规格上限" Width="100"/>
-            <dxg:GridColumn FieldName="LowerSpecificationsLimit" Header="规格下限" Width="100"/>
-            <dxg:GridColumn FieldName="UpperControlLimit" Header="控制上限" Width="100"/>
-            <dxg:GridColumn FieldName="LowerControlLimit" Header="控制下限" Width="100"/>
-            <dxg:GridColumn FieldName="UOMCode" Header="UOMCode" Width="100"/>
-        </dxg:GridControl>-->
+        </Grid> 
     </Grid>
 </UserControl>
