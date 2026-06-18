@@ -216,6 +216,57 @@ namespace ZenergyBFSI.View.Bars
         public ObservableCollection<StationDotInfo> StationDots { get; }
             = new ObservableCollection<StationDotInfo>();
 
+        // ---- 数据库连接状态 ----
+
+        private Brush _dbLocalStatus = Brushes.Gray;
+        public Brush DbLocalStatus
+        {
+            get => _dbLocalStatus;
+            set
+            {
+                if (_dbLocalStatus != value)
+                {
+                    _dbLocalStatus = value;
+                    RaisePropertyChanged("DbLocalStatus");
+                    RaisePropertyChanged("DbLocalToolTip");
+                }
+            }
+        }
+
+        private Brush _dbRemote1Status = Brushes.Gray;
+        public Brush DbRemote1Status
+        {
+            get => _dbRemote1Status;
+            set
+            {
+                if (_dbRemote1Status != value)
+                {
+                    _dbRemote1Status = value;
+                    RaisePropertyChanged("DbRemote1Status");
+                    RaisePropertyChanged("DbRemote1ToolTip");
+                }
+            }
+        }
+
+        private Brush _dbRemote2Status = Brushes.Gray;
+        public Brush DbRemote2Status
+        {
+            get => _dbRemote2Status;
+            set
+            {
+                if (_dbRemote2Status != value)
+                {
+                    _dbRemote2Status = value;
+                    RaisePropertyChanged("DbRemote2Status");
+                    RaisePropertyChanged("DbRemote2ToolTip");
+                }
+            }
+        }
+
+        public string DbLocalToolTip => "本地库 " + (DbLocalStatus == Brushes.LimeGreen ? "在线" : "离线");
+        public string DbRemote1ToolTip => "远程库1 " + (DbRemote1Status == Brushes.LimeGreen ? "在线" : "离线");
+        public string DbRemote2ToolTip => "远程库2 " + (DbRemote2Status == Brushes.LimeGreen ? "在线" : "离线");
+
         // ---- 时钟 ----
 
         public DateTime CurrentTime
@@ -269,6 +320,19 @@ namespace ZenergyBFSI.View.Bars
                         StationDots[i].ToolTip = $"{StationDots[i].Name}: {stateText}";
                     }
                 }
+
+                // 数据库连接状态
+                try
+                {
+                    var dbHealth = BlueFilmDataQueueManager.I.GetDbHealth();
+                    DbLocalStatus = dbHealth.TryGetValue(@"本地(DESKTOP-0F9L4KO\RJ)", out var dbl) && dbl
+                        ? Brushes.LimeGreen : Brushes.Red;
+                    DbRemote1Status = dbHealth.TryGetValue("DESKTOP-NHDST87", out var dbr1) && dbr1
+                        ? Brushes.LimeGreen : Brushes.Red;
+                    DbRemote2Status = dbHealth.TryGetValue("DESKTOP-2ADDTIC", out var dbr2) && dbr2
+                        ? Brushes.LimeGreen : Brushes.Red;
+                }
+                catch { /* QueueManager may not be initialized yet */ }
 
                 CurrentTime = DateTime.Now;
             }

@@ -3,6 +3,7 @@ using RinKit;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -65,6 +66,28 @@ namespace ZenergyBFSI.Service
         private BlueFilmDataMOMRepository _momRepoLocal;
         private BlueFilmDataMOMRepository _momRepoRemote1;
         private BlueFilmDataMOMRepository _momRepoRemote2;
+
+        #endregion
+
+        #region 数据库连接状态（供状态栏轮询）
+
+        /// <summary>
+        /// 三库连接状态字典 — 键: 服务器标签, 值: 是否在线
+        /// 由消费者线程更新，UI 线程通过 GetDbHealth() 读取
+        /// </summary>
+        private readonly ConcurrentDictionary<string, bool> _dbHealth
+            = new ConcurrentDictionary<string, bool>();
+
+        /// <summary>
+        /// 获取三库连接状态快照（线程安全，供状态栏 UI 轮询）
+        /// </summary>
+        public IReadOnlyDictionary<string, bool> GetDbHealth() =>
+            new Dictionary<string, bool>(_dbHealth);
+
+        private void SetDbHealthy(string label, bool healthy)
+        {
+            _dbHealth[label] = healthy;
+        }
 
         #endregion
 
@@ -304,6 +327,7 @@ namespace ZenergyBFSI.Service
             try
             {
                 var records = await Task.Run(() => repo.GetByCellCode(cellCode), cts.Token);
+                SetDbHealthy(serverLabel, true);
                 if (records != null && records.Count > 0)
                 {
                     lock (accumulator)
@@ -312,10 +336,12 @@ namespace ZenergyBFSI.Service
             }
             catch (OperationCanceledException)
             {
+                SetDbHealthy(serverLabel, false);
                 Rlog.Warn($"[BlueFilmDataQueue] 查询超时 | 服务器: {serverLabel} | 电芯码: {cellCode} | 超时: {timeoutMs}ms");
             }
             catch (Exception ex)
             {
+                SetDbHealthy(serverLabel, false);
                 Rlog.Error($"[BlueFilmDataQueue] 查询失败 | 服务器: {serverLabel} | 电芯码: {cellCode} | 异常: {ex.Message}");
             }
         }
@@ -433,11 +459,13 @@ namespace ZenergyBFSI.Service
             try
             {
                 await Task.Run(() => _detectionRepoLocal.Insert(data));
+                SetDbHealthy(@"本地(DESKTOP-0F9L4KO\RJ)", true);
             }
             catch (Exception ex)
             {
+                SetDbHealthy(@"本地(DESKTOP-0F9L4KO\RJ)", false);
                 Rlog.Error($"[BlueFilmDataQueue] 本地库写入失败 | 类型: Detection | 异常: {ex.Message} | 时间: {DateTime.Now}");
-                throw; // 本地库失败不吞异常
+                throw;
             }
 
             // 2. 远程库1（3s 超时，失败入重试队列）
@@ -462,9 +490,11 @@ namespace ZenergyBFSI.Service
             try
             {
                 await Task.Run(() => _momRepoLocal.Insert(data));
+                SetDbHealthy(@"本地(DESKTOP-0F9L4KO\RJ)", true);
             }
             catch (Exception ex)
             {
+                SetDbHealthy(@"本地(DESKTOP-0F9L4KO\RJ)", false);
                 Rlog.Error($"[BlueFilmDataQueue] 本地库写入失败 | 类型: MOM | 异常: {ex.Message} | 时间: {DateTime.Now}");
                 throw;
             }
@@ -494,10 +524,11 @@ namespace ZenergyBFSI.Service
             var task = Task.Run(() => repo.Insert(payload));
             if (await Task.WhenAny(task, Task.Delay(3000)) == task)
             {
-                // 成功
+                SetDbHealthy(serverName, true);
             }
             else
             {
+                SetDbHealthy(serverName, false);
                 EnqueueRetryItem(connString, serverName, payload, "Detection",
                     "写入超时 (3s)");
             }
@@ -515,10 +546,11 @@ namespace ZenergyBFSI.Service
             var task = Task.Run(() => repo.Insert(payload));
             if (await Task.WhenAny(task, Task.Delay(3000)) == task)
             {
-                // 成功
+                SetDbHealthy(serverName, true);
             }
             else
             {
+                SetDbHealthy(serverName, false);
                 EnqueueRetryItem(connString, serverName, payload, "MOM",
                     "写入超时 (3s)");
             }
