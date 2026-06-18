@@ -470,7 +470,7 @@
     <Compile Include="Service\MomOfflineQueue.cs" />
     <Compile Include="Service\BlueFilmDataQueueManager.cs" />
     <Compile Include="Service\DataReadRequest.cs" />
-    <Compile Include="Service\DataRetryItem.cs" />
+
 
     <Compile Include="Service\FinsNetOmron.cs" />
     <Compile Include="Service\LogHelper.cs" />
