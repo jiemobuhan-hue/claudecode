@@ -57,6 +57,9 @@ namespace ZenergyBFSI.Service
         public IReadOnlyDictionary<string, bool> GetDbHealth() =>
             new Dictionary<string, bool>(_dbHealth);
 
+        private bool IsHealthy(string label) =>
+            _dbHealth.TryGetValue(label, out var v) && v;
+
         private void SetDbHealthy(string label, bool healthy)
         {
             var old = _dbHealth.TryGetValue(label, out var v) && v;
@@ -225,10 +228,17 @@ namespace ZenergyBFSI.Service
                 Ng类型数量 = 0
             };
 
-            // 三库查询，每个 3s 超时，独立异常隔离
-            await QuerySingleDbAsync(_detectionRepo1, @"DB1(DESKTOP-0F9L4KO\RJ)", request.CellCode, allRecords, 3000);
-            await QuerySingleDbAsync(_detectionRepo2, "DB2(DESKTOP-NHDST87)", request.CellCode, allRecords, 3000);
-            await QuerySingleDbAsync(_detectionRepo3, "DB3(DESKTOP-2ADDTIC)", request.CellCode, allRecords, 3000);
+            // 只查已知在线的库，离线直接跳过，省掉 3s×N 的超时等待
+            var tasks = new List<Task>();
+            if (IsHealthy(@"DB1(DESKTOP-0F9L4KO\RJ)"))
+                tasks.Add(QuerySingleDbAsync(_detectionRepo1, @"DB1(DESKTOP-0F9L4KO\RJ)", request.CellCode, allRecords, 3000));
+            if (IsHealthy("DB2(DESKTOP-NHDST87)"))
+                tasks.Add(QuerySingleDbAsync(_detectionRepo2, "DB2(DESKTOP-NHDST87)", request.CellCode, allRecords, 3000));
+            if (IsHealthy("DB3(DESKTOP-2ADDTIC)"))
+                tasks.Add(QuerySingleDbAsync(_detectionRepo3, "DB3(DESKTOP-2ADDTIC)", request.CellCode, allRecords, 3000));
+
+            if (tasks.Count > 0)
+                await Task.WhenAll(tasks);
 
             if (allRecords.Count > 0)
                 AggregateDefects(ref result, allRecords);
