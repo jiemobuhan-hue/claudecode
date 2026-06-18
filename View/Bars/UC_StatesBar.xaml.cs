@@ -89,9 +89,15 @@ namespace ZenergyBFSI.View.Bars
             set
             {
                 if (SetValue(value))
+                {
                     RaisePropertyChanged("PlcStatusColor");
+                    RaisePropertyChanged("PlcStatusGlowColor");
+                }
             }
         }
+
+        public Color PlcStatusGlowColor =>
+            PlcStatusColor == Brushes.LimeGreen ? Colors.LimeGreen : Colors.Red;
 
         public Brush MesStatusColor => IsMomConnected ? Brushes.LimeGreen : Brushes.Red;
 
@@ -139,6 +145,7 @@ namespace ZenergyBFSI.View.Bars
                 {
                     RaisePropertyChanged("AutomatonState");
                     RaisePropertyChanged("AutomatonStateColor");
+                    RaisePropertyChanged("AutomatonStateGlowColor");
                     RaisePropertyChanged("AutomatonStateText");
                 }
             }
@@ -149,6 +156,13 @@ namespace ZenergyBFSI.View.Bars
             AutoRun.AutomatonState.Running => Brushes.LimeGreen,
             AutoRun.AutomatonState.Error => Brushes.Red,
             _ => Brushes.Gray
+        };
+
+        public Color AutomatonStateGlowColor => AutomatonState switch
+        {
+            AutoRun.AutomatonState.Running => Colors.LimeGreen,
+            AutoRun.AutomatonState.Error => Colors.Red,
+            _ => Colors.Gray
         };
 
         public string AutomatonStateText => AutomatonState switch
@@ -169,6 +183,7 @@ namespace ZenergyBFSI.View.Bars
                 {
                     RaisePropertyChanged("HeartbeatState");
                     RaisePropertyChanged("HeartbeatStateColor");
+                    RaisePropertyChanged("HeartbeatStateGlowColor");
                     RaisePropertyChanged("HeartbeatStateText");
                 }
             }
@@ -181,6 +196,14 @@ namespace ZenergyBFSI.View.Bars
             AutoRun.GlobalHeartbeatState.Recovering =>
                 new SolidColorBrush(Color.FromRgb(255, 193, 7)),
             _ => Brushes.Gray
+        };
+
+        public Color HeartbeatStateGlowColor => HeartbeatState switch
+        {
+            AutoRun.GlobalHeartbeatState.Healthy => Colors.LimeGreen,
+            AutoRun.GlobalHeartbeatState.Lost => Colors.Red,
+            AutoRun.GlobalHeartbeatState.Recovering => Color.FromRgb(255, 193, 7),
+            _ => Colors.Gray
         };
 
         public string HeartbeatStateText => HeartbeatState switch
@@ -218,54 +241,54 @@ namespace ZenergyBFSI.View.Bars
 
         // ---- 数据库连接状态 ----
 
-        private Brush _dbLocalStatus = Brushes.Gray;
-        public Brush DbLocalStatus
+        private Brush _db1Status = Brushes.Gray;
+        public Brush Db1Status
         {
-            get => _dbLocalStatus;
+            get => _db1Status;
             set
             {
-                if (_dbLocalStatus != value)
+                if (_db1Status != value)
                 {
-                    _dbLocalStatus = value;
-                    RaisePropertyChanged("DbLocalStatus");
-                    RaisePropertyChanged("DbLocalToolTip");
+                    _db1Status = value;
+                    RaisePropertyChanged("Db1Status");
+                    RaisePropertyChanged("Db1ToolTip");
                 }
             }
         }
 
-        private Brush _dbRemote1Status = Brushes.Gray;
-        public Brush DbRemote1Status
+        private Brush _db2Status = Brushes.Gray;
+        public Brush Db2Status
         {
-            get => _dbRemote1Status;
+            get => _db2Status;
             set
             {
-                if (_dbRemote1Status != value)
+                if (_db2Status != value)
                 {
-                    _dbRemote1Status = value;
-                    RaisePropertyChanged("DbRemote1Status");
-                    RaisePropertyChanged("DbRemote1ToolTip");
+                    _db2Status = value;
+                    RaisePropertyChanged("Db2Status");
+                    RaisePropertyChanged("Db2ToolTip");
                 }
             }
         }
 
-        private Brush _dbRemote2Status = Brushes.Gray;
-        public Brush DbRemote2Status
+        private Brush _db3Status = Brushes.Gray;
+        public Brush Db3Status
         {
-            get => _dbRemote2Status;
+            get => _db3Status;
             set
             {
-                if (_dbRemote2Status != value)
+                if (_db3Status != value)
                 {
-                    _dbRemote2Status = value;
-                    RaisePropertyChanged("DbRemote2Status");
-                    RaisePropertyChanged("DbRemote2ToolTip");
+                    _db3Status = value;
+                    RaisePropertyChanged("Db3Status");
+                    RaisePropertyChanged("Db3ToolTip");
                 }
             }
         }
 
-        public string DbLocalToolTip => "本地库 " + (DbLocalStatus == Brushes.LimeGreen ? "在线" : "离线");
-        public string DbRemote1ToolTip => "远程库1 " + (DbRemote1Status == Brushes.LimeGreen ? "在线" : "离线");
-        public string DbRemote2ToolTip => "远程库2 " + (DbRemote2Status == Brushes.LimeGreen ? "在线" : "离线");
+        public string Db1ToolTip => "DB1 DESKTOP-0F9L4KO\\RJ " + (Db1Status == Brushes.LimeGreen ? "在线" : "离线");
+        public string Db2ToolTip => "DB2 DESKTOP-NHDST87 " + (Db2Status == Brushes.LimeGreen ? "在线" : "离线");
+        public string Db3ToolTip => "DB3 DESKTOP-2ADDTIC " + (Db3Status == Brushes.LimeGreen ? "在线" : "离线");
 
         // ---- 时钟 ----
 
@@ -325,11 +348,11 @@ namespace ZenergyBFSI.View.Bars
                 try
                 {
                     var dbHealth = BlueFilmDataQueueManager.I.GetDbHealth();
-                    DbLocalStatus = dbHealth.TryGetValue(@"本地(DESKTOP-0F9L4KO\RJ)", out var dbl) && dbl
+                    Db1Status = dbHealth.TryGetValue(@"DB1(DESKTOP-0F9L4KO\RJ)", out var db1) && db1
                         ? Brushes.LimeGreen : Brushes.Red;
-                    DbRemote1Status = dbHealth.TryGetValue("DESKTOP-NHDST87", out var dbr1) && dbr1
+                    Db2Status = dbHealth.TryGetValue("DB2(DESKTOP-NHDST87)", out var db2) && db2
                         ? Brushes.LimeGreen : Brushes.Red;
-                    DbRemote2Status = dbHealth.TryGetValue("DESKTOP-2ADDTIC", out var dbr2) && dbr2
+                    Db3Status = dbHealth.TryGetValue("DB3(DESKTOP-2ADDTIC)", out var db3) && db3
                         ? Brushes.LimeGreen : Brushes.Red;
                 }
                 catch { /* QueueManager may not be initialized yet */ }

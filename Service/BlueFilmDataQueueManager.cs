@@ -282,26 +282,26 @@ namespace ZenergyBFSI.Service
                 Ng类型数量 = 0
             };
 
-            // 1. 本地库查询（优先，超时 10s）
+            // 1. DB1 查询（超时 10s）
             await QuerySingleDbAsync(
                 _detectionRepoLocal,
-                @"本地(DESKTOP-0F9L4KO\RJ)",
+                @"DB1(DESKTOP-0F9L4KO\RJ)",
                 request.CellCode,
                 allRecords,
                 timeoutMs: 10000);
 
-            // 2. 远程库1 查询（3s 超时，独立异常隔离）
+            // 2. DB2 查询（3s 超时，独立异常隔离）
             await QuerySingleDbAsync(
                 _detectionRepoRemote1,
-                "远程1(DESKTOP-NHDST87)",
+                "DB2(DESKTOP-NHDST87)",
                 request.CellCode,
                 allRecords,
                 timeoutMs: 3000);
 
-            // 3. 远程库2 查询（3s 超时，独立异常隔离）
+            // 3. DB3 查询（3s 超时，独立异常隔离）
             await QuerySingleDbAsync(
                 _detectionRepoRemote2,
-                "远程2(DESKTOP-2ADDTIC)",
+                "DB3(DESKTOP-2ADDTIC)",
                 request.CellCode,
                 allRecords,
                 timeoutMs: 3000);
@@ -450,65 +450,50 @@ namespace ZenergyBFSI.Service
         }
 
         /// <summary>
-        /// WriteRouter — Detection 写入三库
-        /// 本地优先确保 → 远程1 (3s) → 远程2 (3s)
+        /// WriteRouter — Detection 写入三库（全部远程，3s 超时 + 重试）
         /// </summary>
         private async Task WriteDetectionToAllDbsAsync(T_BlueFilmDetection data)
         {
-            // 1. 本地库（优先确保，不设超时）
-            try
-            {
-                await Task.Run(() => _detectionRepoLocal.Insert(data));
-                SetDbHealthy(@"本地(DESKTOP-0F9L4KO\RJ)", true);
-            }
-            catch (Exception ex)
-            {
-                SetDbHealthy(@"本地(DESKTOP-0F9L4KO\RJ)", false);
-                Rlog.Error($"[BlueFilmDataQueue] 本地库写入失败 | 类型: Detection | 异常: {ex.Message} | 时间: {DateTime.Now}");
-                throw;
-            }
+            // DB1 (DESKTOP-0F9L4KO\RJ) — 3s 超时，失败入重试队列
+            await WriteDetectionToRemoteWithTimeoutAsync(
+                data, _detectionRepoLocal,
+                @"DB1(DESKTOP-0F9L4KO\RJ)",
+                Settings.SQLServer本地连接);
 
-            // 2. 远程库1（3s 超时，失败入重试队列）
+            // DB2 (DESKTOP-NHDST87) — 3s 超时，失败入重试队列
             await WriteDetectionToRemoteWithTimeoutAsync(
                 data, _detectionRepoRemote1,
-                "DESKTOP-NHDST87",
+                "DB2(DESKTOP-NHDST87)",
                 Settings.SQLServer远程连接1);
 
-            // 3. 远程库2（3s 超时，失败入重试队列）
+            // DB3 (DESKTOP-2ADDTIC) — 3s 超时，失败入重试队列
             await WriteDetectionToRemoteWithTimeoutAsync(
                 data, _detectionRepoRemote2,
-                "DESKTOP-2ADDTIC",
+                "DB3(DESKTOP-2ADDTIC)",
                 Settings.SQLServer远程连接2);
         }
 
         /// <summary>
-        /// WriteRouter — MOM 出站写入三库
+        /// WriteRouter — MOM 出站写入三库（全部远程，3s 超时 + 重试）
         /// </summary>
         private async Task WriteMOMToAllDbsAsync(T_BlueFilmDataMOM data)
         {
-            // 1. 本地库
-            try
-            {
-                await Task.Run(() => _momRepoLocal.Insert(data));
-                SetDbHealthy(@"本地(DESKTOP-0F9L4KO\RJ)", true);
-            }
-            catch (Exception ex)
-            {
-                SetDbHealthy(@"本地(DESKTOP-0F9L4KO\RJ)", false);
-                Rlog.Error($"[BlueFilmDataQueue] 本地库写入失败 | 类型: MOM | 异常: {ex.Message} | 时间: {DateTime.Now}");
-                throw;
-            }
+            // DB1 (DESKTOP-0F9L4KO\RJ)
+            await WriteMOMToRemoteWithTimeoutAsync(
+                data, _momRepoLocal,
+                @"DB1(DESKTOP-0F9L4KO\RJ)",
+                Settings.SQLServer本地连接);
 
-            // 2. 远程库1
+            // DB2 (DESKTOP-NHDST87)
             await WriteMOMToRemoteWithTimeoutAsync(
                 data, _momRepoRemote1,
-                "DESKTOP-NHDST87",
+                "DB2(DESKTOP-NHDST87)",
                 Settings.SQLServer远程连接1);
 
-            // 3. 远程库2
+            // DB3 (DESKTOP-2ADDTIC)
             await WriteMOMToRemoteWithTimeoutAsync(
                 data, _momRepoRemote2,
-                "DESKTOP-2ADDTIC",
+                "DB3(DESKTOP-2ADDTIC)",
                 Settings.SQLServer远程连接2);
         }
 

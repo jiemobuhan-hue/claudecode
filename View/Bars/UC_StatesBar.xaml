@@ -75,7 +75,7 @@
                                  VerticalAlignment="Center">
                             <Ellipse.Effect>
                                 <DropShadowEffect BlurRadius="4"
-                                                  Color="{Binding AutomatonStateColor}"
+                                                  Color="{Binding AutomatonStateGlowColor}"
                                                   ShadowDepth="0"/>
                             </Ellipse.Effect>
                         </Ellipse>
@@ -90,7 +90,7 @@
                                  VerticalAlignment="Center">
                             <Ellipse.Effect>
                                 <DropShadowEffect BlurRadius="4"
-                                                  Color="{Binding HeartbeatStateColor}"
+                                                  Color="{Binding HeartbeatStateGlowColor}"
                                                   ShadowDepth="0"/>
                             </Ellipse.Effect>
                         </Ellipse>
@@ -134,33 +134,33 @@
             <!-- 列5: DB + PLC + MOM -->
             <StatusBarItem Grid.Column="5">
                 <StackPanel Orientation="Horizontal" Margin="10,0">
-                    <!-- 本地库 -->
+                    <!-- DB1 -->
                     <StackPanel Orientation="Horizontal" Margin="10,0"
-                                ToolTip="{Binding DbLocalToolTip}">
-                        <TextBlock Text="DB本地" VerticalAlignment="Center"
+                                ToolTip="{Binding Db1ToolTip}">
+                        <TextBlock Text="DB1" VerticalAlignment="Center"
                                    FontSize="11" Margin="0,0,3,0" Opacity="0.7"/>
                         <Ellipse Width="14" Height="14"
-                                 Fill="{Binding DbLocalStatus}"
+                                 Fill="{Binding Db1Status}"
                                  VerticalAlignment="Center"/>
                     </StackPanel>
 
-                    <!-- 远程库1 -->
+                    <!-- DB2 -->
                     <StackPanel Orientation="Horizontal" Margin="5,0"
-                                ToolTip="{Binding DbRemote1ToolTip}">
-                        <TextBlock Text="DB远1" VerticalAlignment="Center"
+                                ToolTip="{Binding Db2ToolTip}">
+                        <TextBlock Text="DB2" VerticalAlignment="Center"
                                    FontSize="11" Margin="0,0,3,0" Opacity="0.7"/>
                         <Ellipse Width="14" Height="14"
-                                 Fill="{Binding DbRemote1Status}"
+                                 Fill="{Binding Db2Status}"
                                  VerticalAlignment="Center"/>
                     </StackPanel>
 
-                    <!-- 远程库2 -->
+                    <!-- DB3 -->
                     <StackPanel Orientation="Horizontal" Margin="5,0"
-                                ToolTip="{Binding DbRemote2ToolTip}">
-                        <TextBlock Text="DB远2" VerticalAlignment="Center"
+                                ToolTip="{Binding Db3ToolTip}">
+                        <TextBlock Text="DB3" VerticalAlignment="Center"
                                    FontSize="11" Margin="0,0,3,0" Opacity="0.7"/>
                         <Ellipse Width="14" Height="14"
-                                 Fill="{Binding DbRemote2Status}"
+                                 Fill="{Binding Db3Status}"
                                  VerticalAlignment="Center"/>
                     </StackPanel>
 
@@ -176,7 +176,7 @@
                                  VerticalAlignment="Center">
                             <Ellipse.Effect>
                                 <DropShadowEffect BlurRadius="5"
-                                                  Color="{Binding PlcStatusColor}"
+                                                  Color="{Binding PlcStatusGlowColor}"
                                                   ShadowDepth="0"/>
                             </Ellipse.Effect>
                         </Ellipse>
