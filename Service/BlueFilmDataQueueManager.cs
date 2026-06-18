@@ -123,18 +123,18 @@ namespace ZenergyBFSI.Service
                 if (task.Wait(2000))
                 {
                     conn.Close();
-                    _dbHealth[label] = true;
+                    SetDbHealthy(label, true);
                     results.AppendLine($"  {label} ✅ 在线");
                 }
                 else
                 {
-                    _dbHealth[label] = false;
+                    SetDbHealthy(label, false);
                     results.AppendLine($"  {label} ❌ 超时 (2s)");
                 }
             }
             catch (Exception ex)
             {
-                _dbHealth[label] = false;
+                SetDbHealthy(label, false);
                 results.AppendLine($"  {label} ❌ {ex.Message}");
             }
         }
