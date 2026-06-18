@@ -1570,7 +1570,6 @@ namespace ZenergyBFSI.Model
 
                     AutoRun.I.LossCount = 0;
                     AutoRun.I.Alarm("", 0);
-                    AutoRun.I.Init();
                 }
             }
         }
@@ -1738,7 +1737,6 @@ namespace ZenergyBFSI.Model
 
                     AutoRun.I.LossCount = 0;
                     AutoRun.I.Alarm("", 0);
-                    AutoRun.I.Init();
                 }
             }
         }
