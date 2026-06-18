@@ -121,35 +121,30 @@ namespace ZenergyBFSI.Service
             {
                 using var conn = new System.Data.SqlClient.SqlConnection(connString);
                 var task = Task.Run(() => { conn.Open(); });
-                if (task.Wait(2000))
+
+                // 等待2秒，如果超时则主动抛出一个 TimeoutException
+                if (!task.Wait(2000))
                 {
-                    if (task.IsFaulted)
-                    {
-                        var inner = task.Exception?.InnerException;
-                        SetDbHealthy(label, false);
-                        results.AppendLine($"  {label} ❌ {inner?.Message ?? "Unknown"}");
-                    }
-                    else
-                    {
-                        conn.Close();
-                        SetDbHealthy(label, true);
-                        results.AppendLine($"  {label} ✅ 在线");
-                    }
+                    // 超时 —— 直接抛出异常，让外层 catch 统一处理
+                    throw new TimeoutException($"连接超时 (2s)");
                 }
-                else
+
+                // 如果 task 完成，检查是否有内部异常
+                if (task.IsFaulted)
                 {
-                    SetDbHealthy(label, false);
-                    results.AppendLine($"  {label} ❌ 超时 (2s)");
+                    // 有异常 —— 将内部异常抛出，让外层 catch 捕获
+                    var inner = task.Exception?.InnerException;
+                    throw inner ?? new Exception("Unknown error");
                 }
-            }
-            catch (AggregateException ex)
-            {
-                SetDbHealthy(label, false);
-                var msg = ex.InnerException?.Message ?? ex.Message;
-                results.AppendLine($"  {label} ❌ {msg}");
+
+                // 一切正常
+                conn.Close();
+                SetDbHealthy(label, true);
+                results.AppendLine($"  {label} ✅ 在线");
             }
             catch (Exception ex)
             {
+                // 现在所有异常（包括超时、连接失败、甚至 AggregateException）都会汇聚到这里
                 SetDbHealthy(label, false);
                 results.AppendLine($"  {label} ❌ {ex.Message}");
             }
@@ -353,13 +348,13 @@ namespace ZenergyBFSI.Service
                 Ng类型数量 = 0
             };
 
-            // 1. DB1 查询（超时 10s）
+            // 1. DB1 查询（3s 超时，三库全部远程同一策略）
             await QuerySingleDbAsync(
                 _detectionRepoLocal,
                 @"DB1(DESKTOP-0F9L4KO\RJ)",
                 request.CellCode,
                 allRecords,
-                timeoutMs: 10000);
+                timeoutMs: 3000);
 
             // 2. DB2 查询（3s 超时，独立异常隔离）
             await QuerySingleDbAsync(
