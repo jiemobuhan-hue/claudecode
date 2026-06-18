@@ -84,30 +84,23 @@ namespace ZenergyBFSI.Service
         {
             try
             {
-                using var conn = new System.Data.SqlClient.SqlConnection(connString);
-                var task = Task.Run(() => { conn.Open(); });
-                if (!task.Wait(2000))
+                // 追加 Connection Timeout，SQL Server 驱动级超时，不依赖 Task.Wait
+                string finalConnString = connString;
+                if (!connString.Contains("Connect Timeout") && !connString.Contains("Connection Timeout"))
                 {
-                    throw new TimeoutException($"连接超时 (2s)");
+                    finalConnString = connString.TrimEnd(';') + ";Connect Timeout=2;";
                 }
-                if (task.IsFaulted)
-                {
-                    var inner = task.Exception?.InnerException;
-                    throw inner ?? new Exception("Unknown error");
-                }
+
+                using var conn = new System.Data.SqlClient.SqlConnection(finalConnString);
+                conn.Open();
                 conn.Close();
                 SetDbHealthy(label, true);
                 results.AppendLine($"  {label} ✅ 在线");
             }
-            catch (AggregateException ex)
-            {
-                SetDbHealthy(label, false);
-                results.AppendLine($"  {label} ❌ {ex.InnerException?.Message ?? ex.Message}");
-            }
             catch (Exception ex)
             {
                 SetDbHealthy(label, false);
-                results.AppendLine($"  {label} ❌ {ex.Message}");
+                results.AppendLine($"  {label} ❌ [{ex.GetType().Name}] {ex.Message}");
             }
         }
 
