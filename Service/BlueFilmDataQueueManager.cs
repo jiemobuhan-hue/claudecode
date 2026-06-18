@@ -122,9 +122,18 @@ namespace ZenergyBFSI.Service
                 var task = Task.Run(() => { conn.Open(); });
                 if (task.Wait(2000))
                 {
-                    conn.Close();
-                    SetDbHealthy(label, true);
-                    results.AppendLine($"  {label} ✅ 在线");
+                    if (task.IsFaulted)
+                    {
+                        var inner = task.Exception?.InnerException;
+                        SetDbHealthy(label, false);
+                        results.AppendLine($"  {label} ❌ {inner?.Message ?? "Unknown"}");
+                    }
+                    else
+                    {
+                        conn.Close();
+                        SetDbHealthy(label, true);
+                        results.AppendLine($"  {label} ✅ 在线");
+                    }
                 }
                 else
                 {
@@ -132,10 +141,11 @@ namespace ZenergyBFSI.Service
                     results.AppendLine($"  {label} ❌ 超时 (2s)");
                 }
             }
-            catch (Exception ex)
+            catch (AggregateException ex)
             {
                 SetDbHealthy(label, false);
-                results.AppendLine($"  {label} ❌ {ex.Message}");
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                results.AppendLine($"  {label} ❌ {msg}");
             }
         }
 
@@ -395,6 +405,16 @@ namespace ZenergyBFSI.Service
                 SetDbHealthy(serverLabel, false);
                 Rlog.Warn($"[BlueFilmDataQueue] 查询超时 | 服务器: {serverLabel} | 电芯码: {cellCode} | 超时: {timeoutMs}ms");
             }
+            catch (AggregateException ex) when (ex.InnerException != null)
+            {
+                SetDbHealthy(serverLabel, false);
+                Rlog.Error($"[BlueFilmDataQueue] 查询失败 | 服务器: {serverLabel} | 电芯码: {cellCode} | 异常: {ex.InnerException.Message}");
+            }
+            catch (System.Data.SqlClient.SqlException ex)
+            {
+                SetDbHealthy(serverLabel, false);
+                Rlog.Error($"[BlueFilmDataQueue] SQL错误 | 服务器: {serverLabel} | 电芯码: {cellCode} | 错误号: {ex.Number} | {ex.Message}");
+            }
             catch (Exception ex)
             {
                 SetDbHealthy(serverLabel, false);
@@ -565,7 +585,17 @@ namespace ZenergyBFSI.Service
             var task = Task.Run(() => repo.Insert(payload));
             if (await Task.WhenAny(task, Task.Delay(3000)) == task)
             {
-                SetDbHealthy(serverName, true);
+                if (task.IsFaulted)
+                {
+                    var inner = task.Exception?.InnerException;
+                    SetDbHealthy(serverName, false);
+                    EnqueueRetryItem(connString, serverName, payload, "Detection",
+                        inner?.Message ?? "写入异常");
+                }
+                else
+                {
+                    SetDbHealthy(serverName, true);
+                }
             }
             else
             {
@@ -587,7 +617,17 @@ namespace ZenergyBFSI.Service
             var task = Task.Run(() => repo.Insert(payload));
             if (await Task.WhenAny(task, Task.Delay(3000)) == task)
             {
-                SetDbHealthy(serverName, true);
+                if (task.IsFaulted)
+                {
+                    var inner = task.Exception?.InnerException;
+                    SetDbHealthy(serverName, false);
+                    EnqueueRetryItem(connString, serverName, payload, "MOM",
+                        inner?.Message ?? "写入异常");
+                }
+                else
+                {
+                    SetDbHealthy(serverName, true);
+                }
             }
             else
             {
@@ -629,10 +669,8 @@ namespace ZenergyBFSI.Service
         /// </summary>
         private void RetryCallback()
         {
-            BlueFilmDataQueueManager.I.PingAllDatabases();
             if (_retryBuffer.IsEmpty) return;
 
-            // 取出所有待重试项
             var items = new List<DataRetryItem>();
             while (_retryBuffer.TryDequeue(out var item))
                 items.Add(item);
@@ -642,7 +680,7 @@ namespace ZenergyBFSI.Service
                 if (item.RetryCount >= 10)
                 {
                     Rlog.Error($"[BlueFilmDataQueue] 重试次数耗尽 | 服务器: {item.TargetServerName} | 首次失败: {item.FirstFailTime:yyyy-MM-dd HH:mm:ss} | 数据: {JsonConvert.SerializeObject(item.Payload)}");
-                    continue; // 丢弃
+                    continue;
                 }
 
                 item.LastFailTime = DateTime.Now;
@@ -665,19 +703,29 @@ namespace ZenergyBFSI.Service
 
                     if (Task.WhenAny(task, Task.Delay(3000)).GetAwaiter().GetResult() == task)
                     {
-                        item.RetryCount++;
-                        Rlog.Info($"[BlueFilmDataQueue] 重试成功 | 服务器: {item.TargetServerName} | 第{item.RetryCount}次");
-                        continue;
+                        if (task.IsFaulted)
+                        {
+                            var inner = task.Exception?.InnerException;
+                            item.LastErrorMessage = inner?.Message ?? "重试异常";
+                        }
+                        else
+                        {
+                            item.RetryCount++;
+                            SetDbHealthy(item.TargetServerName, true);
+                            Rlog.Info($"[BlueFilmDataQueue] 重试成功 | 服务器: {item.TargetServerName} | 第{item.RetryCount}次");
+                            continue;
+                        }
                     }
-
-                    item.LastErrorMessage = "重试超时 (3s)";
+                    else
+                    {
+                        item.LastErrorMessage = "重试超时 (3s)";
+                    }
                 }
                 catch (Exception ex)
                 {
                     item.LastErrorMessage = ex.Message;
                 }
 
-                // 失败，重新入队
                 _retryBuffer.Enqueue(item);
             }
         }
